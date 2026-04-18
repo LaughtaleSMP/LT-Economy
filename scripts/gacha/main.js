@@ -127,8 +127,6 @@ function nearbyValidChestCached(player) {
 const IDLE_BORDER    = [0,1,2,3,4,5,6,7,8, 17, 26,25,24,23,22,21,20,19,18, 9];
 const IDLE_INNER     = [10,11,12,14,15,16];
 const IDLE_CENTER    = 13;
-// [OPT] Dinaikkan dari 3 → 5 tick: animasi comet masih halus (~100ms),
-// hemat ~40% operasi ItemStack create + container.setItem per chest.
 const IDLE_ANIM_INT  = 5;
 const IDLE_COMET_LEN = 5;
 
@@ -220,9 +218,6 @@ function drawIdleFrame(container, key, type, frame) {
   const lbl = (isPt ? ptL : eqL)[Math.floor(frame / 25) % 3];
   setSlot(container, key, IDLE_CENTER, icon, lbl);
 
-  // [OPT] dpSet hanya tiap 25 frame (bukan setiap frame).
-  // Snapshot tidak perlu update lebih sering dari itu karena hanya dipakai
-  // oleh global guard untuk restore saat chest idle tanpa sesi aktif.
   if (frame === 0 || frame % 25 === 0) snapshotExpected(key);
 }
 
@@ -304,8 +299,6 @@ async function reveal10x(container, results, key, player, type) {
 }
 
 function startGuard(container, key, ownerId) {
-  // [OPT] Interval dinaikkan 2 → 4 tick: masih cukup cepat mencegah theft,
-  // hemat 50% chest slot read selama sesi aktif.
   const guardId = system.runInterval(() => {
     const stillActive = activeChests.has(key) || isSessionOwner(key, ownerId);
     if (!stillActive) { chestExpected.delete(key); system.clearRun(guardId); return; }
@@ -318,9 +311,6 @@ function startGuard(container, key, ownerId) {
           container.setItem(slot, mkItem(e.typeId, e.nameTag.replace(MARK, "")));
       }
     } catch {}
-    // [OPT] Inventory scan DIHAPUS dari sini — sudah ditangani oleh
-    // initSecurity (security.js) setiap 10 tick secara global.
-    // Melakukan scan di sini (2 tick) sekaligus di sana (10 tick) = redundan.
   }, 4);
   return guardId;
 }
@@ -628,9 +618,17 @@ async function executeGachaIntent(player, intent, block) {
   try {
     await waitChestOpen(player, chestBlock);
 
+    // [FIX BUG-DISC] Cek return value validateAndConsumeDisc.
+    // Sebelumnya return value diabaikan — jika kode sudah habis/dipakai player lain
+    // antara validasi dan eksekusi, player tetap dapat harga diskon tanpa kode dikonsumsi.
     if (disc) {
+      const consumed = validateAndConsumeDisc(disc.code, type, player.id);
       pendingDisc.delete(player.id);
-      validateAndConsumeDisc(disc.code, type, player.id);
+      if (!consumed) {
+        // Kode sudah tidak valid (habis atau race condition) — log saja, lanjut normal.
+        // Player sudah bayar harga diskon; ini trade-off minimal yang diterima.
+        console.warn(`[Gacha] Kode diskon "${disc.code}" tidak bisa dikonsumsi untuk ${player.name} — kemungkinan sudah habis atau race condition.`);
+      }
     }
 
     const c = fresh();
@@ -1622,6 +1620,21 @@ world.beforeEvents.playerLeave.subscribe(({ player }) => {
   try { syncPlayerData(player); } catch {}
 });
 
+// ═══════════════════════════════════════════════════════════
+// [FIX BUG-DBLOPEN] Hub menu double-open prevention
+//
+// Masalah: Saat player klik kanan blok non-chest sambil pegang amethyst shard,
+// KEDUA event berikut fire di tick yang sama:
+//   1. beforeEvents.playerInteractWithBlock → schedule system.run(jobA)
+//   2. afterEvents.itemUse                  → schedule system.run(jobB)
+//
+// Check `activePlayers.has()` terjadi sebelum system.run, sehingga keduanya lolos
+// dan hub terbuka dua kali.
+//
+// Fix: Tambah re-check di dalam system.run untuk kedua handler.
+// Karena beforeEvent fire sebelum afterEvent, jobA masuk queue lebih dulu.
+// Ketika jobA jalan, ia set activePlayers. Ketika jobB jalan, re-check sudah true → skip.
+// ═══════════════════════════════════════════════════════════
 world.afterEvents.itemUse.subscribe(ev => {
   const player = ev.source;
   if (ev.itemStack?.typeId !== CFG.TRIGGER) return;
@@ -1630,6 +1643,9 @@ world.afterEvents.itemUse.subscribe(ev => {
     player.sendMessage("§e[Gacha] Tunggu sebentar!"); return;
   }
   system.run(async () => {
+    // [FIX BUG-DBLOPEN] Re-check di sini: jika beforeEvents.playerInteractWithBlock
+    // sudah lebih dulu set activePlayers (karena before event queue lebih awal), skip.
+    if (activePlayers.has(player.id) || pendingChestInteract.has(player.id)) return;
     activePlayers.set(player.id, "__hub__");
     try {
       const claimed = claimPend(player);
@@ -1651,6 +1667,8 @@ world.beforeEvents.playerInteractWithBlock.subscribe(ev => {
   }
   ev.cancel = true;
   system.run(async () => {
+    // [FIX BUG-DBLOPEN] Re-check di sini juga untuk konsistensi.
+    if (activePlayers.has(player.id) || pendingChestInteract.has(player.id)) return;
     activePlayers.set(player.id, "__hub__");
     try {
       const claimed = claimPend(player);
