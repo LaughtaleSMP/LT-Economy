@@ -1,0 +1,30 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "EconomyAddon",
+    "description": "MobuXP + GachaChest — All-in-one Economy Addon",
+    "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 0]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "entry": "scripts/main.js",
+      "uuid": "b2c3d4e5-f6a7-8901-bcde-f01234567891",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.7.0-beta"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "2.0.0"
+    }
+  ],
+  "capabilities": ["script_eval"]
+}
