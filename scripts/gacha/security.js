@@ -148,10 +148,17 @@ function cleanExpiredLocks() {
 /**
  * Inisialisasi semua guard.
  * HARUS dipanggil dari worldInitialize SETELAH scoreboard siap.
- * @param {Function} mkItemFn     — fungsi mkItem dari main.js
- * @param {Function} getDimFn     — (dimId: string) => Dimension
+ *
+ * [FIX BUG-GUARD] Tambahkan parameter ke-3: registerDropGuardFn.
+ * Sebelumnya initSecurity hanya menerima 2 parameter sehingga
+ * registerItemDropGuard yang dipass dari main.js tidak pernah dipanggil.
+ * Akibatnya item drop dari gacha chest tidak pernah dihapus dan bisa dicuri.
+ *
+ * @param {Function} mkItemFn          — fungsi mkItem dari main.js
+ * @param {Function} getDimFn          — (dimId: string) => Dimension
+ * @param {Function} registerDropGuardFn — registerItemDropGuard dari main.js
  */
-export function initSecurity(mkItemFn, getDimFn) {
+export function initSecurity(mkItemFn, getDimFn, registerDropGuardFn) {
   _mkItem = mkItemFn;
 
   // ── Global anti-theft: chest content guard + inventory scan ──────────
@@ -202,6 +209,16 @@ export function initSecurity(mkItemFn, getDimFn) {
   system.runInterval(() => {
     cleanExpiredLocks();
   }, 200);
+
+  // ── [FIX BUG-GUARD] Daftarkan item drop guard jika fungsi disediakan ──
+  // Sebelumnya fungsi ini dipass sebagai arg ke-3 tapi tidak pernah dipanggil
+  // karena parameter ke-3 tidak ada di signature fungsi ini.
+  if (typeof registerDropGuardFn === 'function') {
+    registerDropGuardFn();
+    console.warn("[GachaSec] Item drop guard registered.");
+  } else {
+    console.warn("[GachaSec] WARN: registerDropGuardFn tidak disediakan — item drop guard tidak aktif!");
+  }
 
   console.warn("[GachaSec] Security module initialized.");
 }
