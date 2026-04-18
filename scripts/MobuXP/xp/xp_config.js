@@ -30,13 +30,11 @@ export const CONFIG = {
 
   streak_timeout_seconds: 8,
 
+  // Hanya 50 yang di-broadcast ke chat & console
   streak_milestones: [50],
 
+  // Hanya pesan untuk milestone 50
   streak_milestone_messages: {
-    5:  "§7[§aStreak§7] §f{player} §e{streak} kill streak! ",
-    10: "§7[§6Streak§7] §f{player} §e{streak} kill streak! ",
-    20: "§7[§cStreak§7] §f{player} §e{streak} kill streak! ",
-    30: "§7[§4Streak§7] §f{player} §e{streak} kill streak! ",
     50: "§7[§dStreak§7] §f{player} §dMENGGILAKAN!! §e{streak} kill streak! ",
   },
 
@@ -56,18 +54,11 @@ export const CONFIG = {
 
   // ============================================================
   // BATAS MAKSIMAL ORB PER SPAWN
-  // (legacy — dipertahankan untuk fallback, tidak dipakai aktif)
   // ============================================================
   max_orb_per_spawn: 60,
 
   // ============================================================
-  // KOIN — Disesuaikan dengan harga gacha peralatan
-  //
-  // Harga gacha (dari config.js):
-  //   EQ_COST_1  = 50 koin  (1x pull)
-  //   EQ_COST_10 = 450 koin (10x pull)
-  //
-  // coin_scoreboard HARUS sama dengan COIN_OBJ di config.js → "coin"
+  // KOIN
   // ============================================================
   coin_scoreboard:    "coin",
 
@@ -80,22 +71,6 @@ export const CONFIG = {
 
   // ============================================================
   // ANTI MOB-STACKING
-  // Mencegah player sengaja numpuk mob untuk farming XP / kill
-  // streak yang bikin server lag.
-  //
-  // mob_stack_limit       : jumlah maksimal mob (dari whitelist) yang
-  //                         boleh ada di radius mob_stack_radius blok
-  //                         dari titik kill. Excess langsung dihapus.
-  // mob_stack_radius      : radius pengecekan (blok).
-  // mob_stack_warn        : kirim pesan ke player saat excess dihapus.
-  // mob_stack_cooldown_ticks : jeda antar pengecekan per-player
-  //                            (hindari cek tiap kill di area
-  //                            yang sama secara berlebihan).
-  //
-  // mob_stack_coin_penalty : jumlah koin yang DIKURANGI dari player
-  //                          per mob excess yang dihapus.
-  //                          Set ke 0 untuk menonaktifkan punishment.
-  //                          Contoh: 5 → tiap 1 mob excess = -5 koin.
   // ============================================================
   mob_stack_limit:            20,
   mob_stack_radius:            8,

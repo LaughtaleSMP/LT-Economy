@@ -142,9 +142,7 @@ function startIdleForChest(key, dimId, loc, type) {
     } catch { return null; }
   };
 
-  const c0 = getContainer();
-  if (c0) drawIdleFrame(c0, key, type, 0);
-
+  const LCM = IDLE_BORDER.length * 50; // 1000
   let frame = 0;
 
   const intervalId = system.runInterval(() => {
@@ -154,7 +152,7 @@ function startIdleForChest(key, dimId, loc, type) {
     if (!c) { stopIdleForChest(key); return; }
 
     drawIdleFrame(c, key, type, frame);
-    frame++;
+    frame = (frame + 1) % LCM;
   }, IDLE_ANIM_INT);
 
   idleGuards.set(key, intervalId);
@@ -218,7 +216,7 @@ function drawIdleFrame(container, key, type, frame) {
   const lbl = (isPt ? ptL : eqL)[Math.floor(frame / 25) % 3];
   setSlot(container, key, IDLE_CENTER, icon, lbl);
 
-  if (frame === 0 || frame % 25 === 0) snapshotExpected(key);
+  snapshotExpected(key);
 }
 
 function drawIdle(container, key, type) {
@@ -618,15 +616,10 @@ async function executeGachaIntent(player, intent, block) {
   try {
     await waitChestOpen(player, chestBlock);
 
-    // [FIX BUG-DISC] Cek return value validateAndConsumeDisc.
-    // Sebelumnya return value diabaikan — jika kode sudah habis/dipakai player lain
-    // antara validasi dan eksekusi, player tetap dapat harga diskon tanpa kode dikonsumsi.
     if (disc) {
       const consumed = validateAndConsumeDisc(disc.code, type, player.id);
       pendingDisc.delete(player.id);
       if (!consumed) {
-        // Kode sudah tidak valid (habis atau race condition) — log saja, lanjut normal.
-        // Player sudah bayar harga diskon; ini trade-off minimal yang diterima.
         console.warn(`[Gacha] Kode diskon "${disc.code}" tidak bisa dikonsumsi untuk ${player.name} — kemungkinan sudah habis atau race condition.`);
       }
     }
@@ -819,11 +812,12 @@ async function showRewardInfo(player, type) {
     .body(body).button("§l Kembali").show(player);
 }
 
+// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showDiscountInput(player, gachaType) {
   const cur  = pendingDisc.get(player.id);
   const hint = cur ? `§aAktif: ${cur.code} (-${cur.pct}%)\n§fKode baru / kosongkan utk hapus:` : "§fMasukkan kode:";
   const res  = await new ModalFormData().title("§l§e  Kode Diskon  §r")
-    .textField(hint, "Contoh: HEMAT50", "").show(player);
+    .textField(hint, "Contoh: HEMAT50", { defaultValue: "" }).show(player);
   if (res.canceled) return;
   const raw = String(res.formValues?.[0] ?? "").trim().toUpperCase();
   if (!raw) { if (cur) { pendingDisc.delete(player.id); player.sendMessage("§7[Diskon] Kode dihapus."); } return; }
@@ -976,13 +970,14 @@ async function showAdminAction(adminPlayer, target, currency) {
   }
 }
 
+// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminAmountInput(adminPlayer, target, currency, action) {
   const isGem  = currency === "gem";
   const curBal = isGem ? getGem(target) : getCoin(target);
   const actLbl = action === "add" ? "Tambah" : action === "remove" ? "Kurangi" : "Set";
   const res    = await new ModalFormData()
     .title(`§l  ${actLbl} ${isGem ? "Gem" : "Koin"} — ${target.name}`)
-    .textField(`§f${actLbl} §7(sekarang: §f${curBal}§7)`, "Contoh: 100", "0").show(adminPlayer);
+    .textField(`§f${actLbl} §7(sekarang: §f${curBal}§7)`, "Contoh: 100", { defaultValue: "0" }).show(adminPlayer);
   if (res.canceled) return false;
   const amount = Math.floor(Number(String(res.formValues?.[0] ?? "0").trim()));
   if (!Number.isFinite(amount) || amount < 0) { adminPlayer.sendMessage("§c[!] Angka tidak valid."); return false; }
@@ -1013,6 +1008,7 @@ async function showAdminAmountInput(adminPlayer, target, currency, action) {
   adminPlayer.sendMessage("§c[Admin] Gagal. Coba lagi."); return false;
 }
 
+// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminActionOffline(adminPlayer, target, currency, reg) {
   const isGem  = currency === "gem";
   const pendKey = isGem ? (K_PEND_GEM + target.id) : (K_PEND_COIN + target.id);
@@ -1036,7 +1032,7 @@ async function showAdminActionOffline(adminPlayer, target, currency, reg) {
   const actLbl = action === "add" ? "Tambah" : action === "remove" ? "Kurangi" : "Set";
   const inputRes = await new ModalFormData()
     .title(`§l  ${actLbl} ${isGem ? "Gem" : "Koin"} — ${target.name} (Offline)`)
-    .textField(`§f${actLbl} §7(sekarang: §f${curBal}§7)`, "Contoh: 100", "0")
+    .textField(`§f${actLbl} §7(sekarang: §f${curBal}§7)`, "Contoh: 100", { defaultValue: "0" })
     .show(adminPlayer);
   if (inputRes.canceled) return false;
 
@@ -1066,9 +1062,10 @@ async function showAdminActionOffline(adminPlayer, target, currency, reg) {
   return true;
 }
 
+// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminCreateCode(adminPlayer) {
   const res = await new ModalFormData().title("§l§a  Buat Kode Diskon  §r")
-    .textField("§fNama Kode §7(A-Z, 0-9, _ | 3-20 karakter)", "Contoh: HEMAT50", "")
+    .textField("§fNama Kode §7(A-Z, 0-9, _ | 3-20 karakter)", "Contoh: HEMAT50", { defaultValue: "" })
     .slider("§fDiskon (%)", 5, 90, 5, 50)
     .dropdown("§fBerlaku untuk", ["Semua Gacha", "Partikel Saja", "Peralatan Saja"], 0)
     .slider("§fJumlah Pakai", 1, 50, 1, 1).show(adminPlayer);
@@ -1114,6 +1111,7 @@ async function showAdminListCodes(adminPlayer) {
   await new ActionFormData().title("§l  Daftar Kode  §r").body(body).button("§l Kembali").show(adminPlayer);
 }
 
+// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminRegisterChest(adminPlayer, block = null) {
   if (!adminPlayer.hasTag(CFG.ADMIN_TAG)) { adminPlayer.sendMessage("§c[!] Akses ditolak."); return; }
 
@@ -1151,7 +1149,7 @@ async function showAdminRegisterChest(adminPlayer, block = null) {
     .title("§l  Daftarkan Chest  §r")
     .textField(
       `§f Chest ditemukan: ${typeLbl}\n§7 Posisi: §f${x}, ${y}, ${z}\n§7 Label (opsional):`,
-      "Contoh: Chest Spawn", ""
+      "Contoh: Chest Spawn", { defaultValue: "" }
     ).show(adminPlayer);
   if (inputRes.canceled) return;
 
@@ -1284,6 +1282,7 @@ async function showExportImportAllUI(adminPlayer) {
   }
 }
 
+// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showBulkExportUI(adminPlayer) {
   if (!adminPlayer.hasTag(CFG.ADMIN_TAG)) { adminPlayer.sendMessage("§c[!] Akses ditolak."); return; }
   const { entries, full } = buildBulkExport();
@@ -1300,7 +1299,7 @@ async function showBulkExportUI(adminPlayer) {
     .title(`§l§3  Export Data — ${entries.length} player  §r`)
     .textField(
       `§eSalin seluruh string di bawah ini:\n§7${entries.length} player · ${full.length} karakter`,
-      "", full
+      "", { defaultValue: full }
     )
     .show(adminPlayer);
 }
@@ -1490,7 +1489,7 @@ system.run(() => {
 if (!world.scoreboard.getObjective(CFG.GEM_OBJ))
   world.scoreboard.addObjective(CFG.GEM_OBJ, "Gem");
 if (!world.scoreboard.getObjective(CFG.COIN_OBJ))
-  world.scoreboard.addObjective(CFG.COIN_OBJ, "Koin");  
+  world.scoreboard.addObjective(CFG.COIN_OBJ, "Koin");
   initSecurity(mkItem, (dimId) => world.getDimension(dimId), registerItemDropGuard);
   system.runTimeout(() => {
     for (const c of getAllowedChests())
@@ -1622,18 +1621,6 @@ world.beforeEvents.playerLeave.subscribe(({ player }) => {
 
 // ═══════════════════════════════════════════════════════════
 // [FIX BUG-DBLOPEN] Hub menu double-open prevention
-//
-// Masalah: Saat player klik kanan blok non-chest sambil pegang amethyst shard,
-// KEDUA event berikut fire di tick yang sama:
-//   1. beforeEvents.playerInteractWithBlock → schedule system.run(jobA)
-//   2. afterEvents.itemUse                  → schedule system.run(jobB)
-//
-// Check `activePlayers.has()` terjadi sebelum system.run, sehingga keduanya lolos
-// dan hub terbuka dua kali.
-//
-// Fix: Tambah re-check di dalam system.run untuk kedua handler.
-// Karena beforeEvent fire sebelum afterEvent, jobA masuk queue lebih dulu.
-// Ketika jobA jalan, ia set activePlayers. Ketika jobB jalan, re-check sudah true → skip.
 // ═══════════════════════════════════════════════════════════
 world.afterEvents.itemUse.subscribe(ev => {
   const player = ev.source;
@@ -1643,8 +1630,6 @@ world.afterEvents.itemUse.subscribe(ev => {
     player.sendMessage("§e[Gacha] Tunggu sebentar!"); return;
   }
   system.run(async () => {
-    // [FIX BUG-DBLOPEN] Re-check di sini: jika beforeEvents.playerInteractWithBlock
-    // sudah lebih dulu set activePlayers (karena before event queue lebih awal), skip.
     if (activePlayers.has(player.id) || pendingChestInteract.has(player.id)) return;
     activePlayers.set(player.id, "__hub__");
     try {
@@ -1667,7 +1652,6 @@ world.beforeEvents.playerInteractWithBlock.subscribe(ev => {
   }
   ev.cancel = true;
   system.run(async () => {
-    // [FIX BUG-DBLOPEN] Re-check di sini juga untuk konsistensi.
     if (activePlayers.has(player.id) || pendingChestInteract.has(player.id)) return;
     activePlayers.set(player.id, "__hub__");
     try {

@@ -25,12 +25,8 @@ const CONFIG_DEFAULTS = {
   streak_bonus_chance_per_kill:  3,
   streak_max_bonus_chance:      80,
   streak_timeout_seconds:        8,
-  streak_milestones:             [5, 10, 20, 30, 50],
+  streak_milestones:             [50],
   streak_milestone_messages: {
-    5:  "§7[§aStreak§7] §f{player} §e{streak} kill streak! ",
-    10: "§7[§6Streak§7] §f{player} §e{streak} kill streak! ",
-    20: "§7[§cStreak§7] §f{player} §e{streak} kill streak! ",
-    30: "§7[§4Streak§7] §f{player} §e{streak} kill streak! ",
     50: "§7[§dStreak§7] §f{player} §dMENGGILAKAN!! §e{streak} kill streak! ",
   },
 
@@ -124,10 +120,7 @@ const MULTIPLIER        = CONFIG.xp_multiplier_percent / 100;
 const WHITELIST         = CONFIG.whitelist;
 const TIER_TOTAL_WEIGHT = CONFIG.bonus_tiers.reduce((sum, t) => sum + t.weight, 0);
 
-// ============================================================
-// LOG MILESTONE — threshold console log per-player
-// Hanya log ke console saat streak mencapai angka tertentu.
-// ============================================================
+// Console log milestone hanya tepat di angka ini
 const LOG_MILESTONE_THRESHOLD = 50;
 
 function rollBonusTier() {
@@ -171,7 +164,6 @@ function incrementStreak(playerName) {
 }
 
 // Cleanup streak + effect cooldown + stackCheck cooldown setiap 100 tick
-// Digabung jadi SATU interval agar tidak ada beban interval ganda.
 system.runInterval(() => {
   const now      = Date.now();
   const nowTick  = system.currentTick;
@@ -180,12 +172,10 @@ system.runInterval(() => {
     if (now >= data.expireMs) streakMap.delete(name);
   }
 
-  // Bersihkan effectCooldownMap dari entry stale (>30 tick lalu)
   for (const [name, lastTick] of effectCooldownMap) {
     if (nowTick - lastTick > 30) effectCooldownMap.delete(name);
   }
 
-  // Bersihkan stackCheckCooldown dari entry stale
   for (const [name, lastTick] of stackCheckCooldown) {
     if (nowTick - lastTick > CONFIG.mob_stack_cooldown_ticks * 4) stackCheckCooldown.delete(name);
   }
@@ -323,7 +313,7 @@ function playGildedDropEffect(player, dimension, pos) {
 }
 
 // ============================================================
-// HELPER: Broadcast milestone + console log hanya di threshold
+// HELPER: Broadcast milestone — hanya 50 streak
 // ============================================================
 function broadcastMilestone(playerName, streak) {
   const template = CONFIG.streak_milestone_messages[streak];
@@ -335,8 +325,8 @@ function broadcastMilestone(playerName, streak) {
 
   world.sendMessage(message);
 
-  // Console log HANYA di milestone 50 (tidak mengotori log)
-  if (streak >= LOG_MILESTONE_THRESHOLD) {
+  // Console log hanya tepat di milestone 50
+  if (streak === LOG_MILESTONE_THRESHOLD) {
     console.log(
       `[XP Manager] 🔥 MILESTONE ${streak} — Player: ${playerName}`
     );
@@ -464,8 +454,6 @@ function resolveKillerPlayer(event, pos, dimension) {
 
 // ============================================================
 // HANDLER: XP + Koin saat mob mati
-// Console log DIHAPUS dari sini — tidak mengotori log setiap kill.
-// Log penting tetap ada: Anti-Stack warn, Milestone 50.
 // ============================================================
 world.afterEvents.entityDie.subscribe((event) => {
   const deadEntity = event.deadEntity;
@@ -517,7 +505,6 @@ world.afterEvents.entityDie.subscribe((event) => {
 
       setBar(player, buildActionbarMsg(streak, tier, coinTotal), 5, 60);
 
-      // Log hanya Jackpot (event langka, tidak spam)
       if (tier.label === "Jackpot") {
         console.log(
           `[XP Manager] 💰 JACKPOT! ${mobId}` +
