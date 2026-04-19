@@ -191,10 +191,15 @@ function getCoinLeaderboard(limit = 10) {
     const entries   = [];
     for (const ident of obj.getParticipants()) {
       try {
-        const isOnline = onlineMap.has(ident.displayName);
-        const score    = isOnline ? onlineMap.get(ident.displayName) : (obj.getScore(ident) ?? 0);
+        const name = ident.displayName;
+        // Filter entri sistem Bedrock yang bukan nama player asli
+        if (!name) continue;
+        if (name.startsWith("command.")) continue;
+        if (name.includes(".scoreboard.")) continue;
+        const isOnline = onlineMap.has(name);
+        const score    = isOnline ? onlineMap.get(name) : (obj.getScore(ident) ?? 0);
         if (score <= 0) continue;
-        entries.push({ name: ident.displayName, coin: score, isOnline });
+        entries.push({ name, coin: score, isOnline });
       } catch {}
     }
     return entries.sort((a, b) => b.coin - a.coin).slice(0, limit);
@@ -683,7 +688,7 @@ async function uiAdmin(player) {
 
     if (res.selection === 0) await adminGiveCoin(player);
     if (res.selection === 1) await adminDeductCoin(player);
-    if (res.selection === 2) await adminSetTax(player, settings);
+    if (res.selection === 2) await adminSetTax(player);
     if (res.selection === 3) await adminResetDaily(player);
     if (res.selection === 4) await adminClearHistory(player);
     if (res.selection === 5) await adminViewBalances(player);
@@ -744,18 +749,25 @@ async function adminDeductCoin(admin) {
   tgt.sendMessage(`§c[Bank] Admin mengurangi §c${fmt(deducted)} Koin§c. Saldo: §e${fmt(getCoin(tgt))}`);
 }
 
-async function adminSetTax(admin, settings) {
+async function adminSetTax(admin) {
+  const settings = getSettings();
   const res = await new ModalFormData()
     .title("§l  Ubah Pajak  §r")
     .slider(`§f Pajak §7(saat ini: §f${settings.taxPct}%§7)`, 0, 50, 1, settings.taxPct)
     .show(admin);
-
+ 
   if (res.canceled) return;
-  settings.taxPct = res.formValues?.[0] ?? settings.taxPct;
+ 
+  const newTax = Math.floor(Number(res.formValues?.[0] ?? settings.taxPct));
+  if (!Number.isFinite(newTax) || newTax < 0 || newTax > 50) {
+    admin.sendMessage("§c[Bank] Nilai pajak tidak valid."); return;
+  }
+ 
+  settings.taxPct = newTax;
   saveSettings(settings);
   playSfx(admin, SFX.ADMIN);
-  admin.sendMessage(`§a[Bank Admin] Pajak diubah ke §f${settings.taxPct}%`);
-  world.sendMessage(`§e[Bank] Pajak transfer diubah menjadi §f${settings.taxPct}%.`);
+  admin.sendMessage(`§a[Bank Admin] Pajak diubah ke §f${newTax}%`);
+  world.sendMessage(`§e[Bank] Pajak transfer diubah menjadi §f${newTax}%.`);
 }
 
 async function adminResetDaily(admin) {
