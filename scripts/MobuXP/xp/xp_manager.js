@@ -227,21 +227,26 @@ function playKillSound(player) {
 
 // ============================================================
 // GIVE COINS — dengan soft cap probabilitas
-// Mengembalikan jumlah koin yang benar-benar diberikan (0 atau amount)
+// [OPT] Sekarang mengembalikan { given, newTotal } agar caller tidak perlu
+// memanggil getDailyTotal() lagi secara terpisah (menghilangkan 1 extra DP read
+// per kill saat bonus triggered = hemat 1 getDynamicProperty tiap mob mati).
 // ============================================================
 function giveCoinsWithCap(player, amount) {
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { given: 0, newTotal: getDailyTotal(player.id) };
+  }
   const scoreboard = CONFIG.coin_scoreboard;
   if (typeof scoreboard !== "string" || scoreboard.trim() === "") {
     console.error(`[XP Manager] giveCoins GAGAL: coin_scoreboard tidak valid.`);
-    return 0;
+    return { given: 0, newTotal: 0 };
   }
   const dailyTotal = getDailyTotal(player.id);
   const chance     = getCoinChance(dailyTotal);
-  if (Math.random() >= chance) return 0;
-  player.runCommand(`scoreboard players add @s ${scoreboard} ${Math.floor(amount)}`);
-  addDailyTotal(player.id, Math.floor(amount));
-  return Math.floor(amount);
+  if (Math.random() >= chance) return { given: 0, newTotal: dailyTotal };
+  const given = Math.floor(amount);
+  player.runCommand(`scoreboard players add @s ${scoreboard} ${given}`);
+  addDailyTotal(player.id, given);
+  return { given, newTotal: dailyTotal + given };
 }
 
 function takeCoins(player, amount) {
@@ -301,7 +306,7 @@ function broadcastMilestone(playerName, streak) {
   if (!template) return;
   world.sendMessage(template.replace("{player}", playerName).replace("{streak}", streak));
   if (streak === LOG_MILESTONE_THRESHOLD)
-    console.log(`[XP Manager] 🔥 MILESTONE ${streak} — Player: ${playerName}`);
+    console.log(`[XP Manager] MILESTONE ${streak} — Player: ${playerName}`);
 }
 
 // ============================================================
@@ -409,9 +414,11 @@ world.afterEvents.entityDie.subscribe((event) => {
     giveXP(player, finalXP);
     playKillSound(player);
 
-    // Koin base dengan soft cap
-    const coinGivenBase  = giveCoinsWithCap(player, CONFIG.coin_per_kill);
-    const dailyTotal     = getDailyTotal(player.id);
+    // [OPT] giveCoinsWithCap kini mengembalikan { given, newTotal } sehingga
+    // kita tidak perlu memanggil getDailyTotal() lagi secara terpisah.
+    // Sebelumnya: 3x getDailyTotal per kill (2 implicit + 1 explicit).
+    // Sekarang: 1x per giveCoinsWithCap call = 2x total, hemat 1 DP read per kill.
+    const { given: coinGivenBase, newTotal: dailyAfterBase } = giveCoinsWithCap(player, CONFIG.coin_per_kill);
 
     checkAndCleanStack(player, dimension, pos);
 
@@ -422,21 +429,22 @@ world.afterEvents.entityDie.subscribe((event) => {
     const isBonusTriggered = Math.random() < getBonusChance(streak);
 
     if (isBonusTriggered) {
-      const tier           = rollBonusTier();
-      const coinBonusAmt   = coinBonusForTier(tier.label);
-      const coinGivenBonus = giveCoinsWithCap(player, coinBonusAmt);
-      const coinTotal      = coinGivenBase + coinGivenBonus;
+      const tier                                              = rollBonusTier();
+      const coinBonusAmt                                      = coinBonusForTier(tier.label);
+      const { given: coinGivenBonus, newTotal: dailyFinal }  = giveCoinsWithCap(player, coinBonusAmt);
+      const coinTotal                                         = coinGivenBase + coinGivenBonus;
 
       giveXP(player, tier.xp);
       playGildedDropEffect(player, dimension, pos);
 
-      setBar(player, buildActionbarMsg(streak, tier, coinTotal, getDailyTotal(player.id)), 5, 60);
+      // dailyFinal sudah di-return dari giveCoinsWithCap, tidak perlu baca lagi
+      setBar(player, buildActionbarMsg(streak, tier, coinTotal, dailyFinal), 5, 60);
 
       if (tier.label === "Jackpot") {
-        console.log(`[XP Manager] 💰 JACKPOT! ${mobId} | Bonus: +${tier.xp} XP | Streak: ${streak} | Player: ${playerName}`);
+        console.log(`[XP Manager] JACKPOT! ${mobId} | Bonus: +${tier.xp} XP | Streak: ${streak} | Player: ${playerName}`);
       }
     } else {
-      setBar(player, buildActionbarMsg(streak, null, coinGivenBase, dailyTotal), 5, 60);
+      setBar(player, buildActionbarMsg(streak, null, coinGivenBase, dailyAfterBase), 5, 60);
     }
   });
 });

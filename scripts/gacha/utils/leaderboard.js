@@ -6,7 +6,9 @@ import { bitmaskToPt } from "./player.js";
 
 let _lbRawCache = null;
 let _lbCacheTick = -999;
-const LB_CACHE_TTL = 60;
+// [OPT] Naikkan dari 60 → 400 tick (20 detik). Leaderboard tidak perlu
+// rebuild tiap 3 detik — data berubah lambat dan rebuild = N*2 dpGet calls.
+const LB_CACHE_TTL = 400;
 
 function buildRawMap() {
   const now = system.currentTick;

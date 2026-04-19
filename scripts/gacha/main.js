@@ -52,8 +52,24 @@ const K_SESS_REF      = "gacha:sess_ref:";
 const K_STAGED_IMPORT = "gacha:staged_import";
 const K_REG_CHESTS    = "gacha:reg_chests";
 
-function getAllowedChests() { return dpGet(K_REG_CHESTS, []); }
-function saveAllowedChests(list) { dpSet(K_REG_CHESTS, list); }
+// ── In-memory chest list cache ─────────────────────────────
+// [OPT] Menghindari dpGet(K_REG_CHESTS) berulang kali.
+// nearbyValidChest lama: loop 847 blok + isValidChest per chest = ratusan DP read.
+// nearbyValidChest baru: loop N chest terdaftar + 1 block.getBlock per kandidat.
+// Cache diinvalidate setiap saveAllowedChests dipanggil (add/remove chest).
+let _allowedChestCache = null;
+
+const getAllowedChestsCached = () => {
+  if (_allowedChestCache === null) _allowedChestCache = dpGet(K_REG_CHESTS, []);
+  return _allowedChestCache;
+};
+
+function getAllowedChests() { return getAllowedChestsCached(); }
+
+function saveAllowedChests(list) {
+  _allowedChestCache = list; // update cache sekaligus agar tidak stale
+  dpSet(K_REG_CHESTS, list);
+}
 
 const idleGuards = new Map();
 
@@ -91,22 +107,35 @@ function isChestCandidate(block) {
   return true;
 }
 
+// [OPT] Gunakan cache in-memory — hindari dpGet(K_REG_CHESTS) per interaksi.
 function isValidChest(block) {
   if (!isChestCandidate(block)) return false;
-  return getAllowedChests().some(c => c.key === ck(block));
+  const k = ck(block);
+  return getAllowedChestsCached().some(c => c.key === k);
 }
 
+// [OPT] nearbyValidChest: dari loop O(847 blok) → O(N chest terdaftar).
+// Lama: iterate setiap blok dalam radius, getBlock() + isValidChest() per chest block
+//       = bisa ratusan getBlock + N*dpGet jika banyak chest di area.
+// Baru: iterate daftar chest terdaftar (biasanya < 10), cek jarak Manhattan,
+//       lalu 1x getBlock() per kandidat yang masuk range.
 function nearbyValidChest(player) {
-  const { x, y, z } = player.location, dim = player.dimension;
-  const RX = CFG.CHEST_SCAN_R, RY = CFG.CHEST_SCAN_Y;
-  for (let dx = -RX; dx <= RX; dx++)
-    for (let dy = -RY; dy <= RY; dy++)
-      for (let dz = -RX; dz <= RX; dz++) {
-        try {
-          const b = dim.getBlock({ x: Math.floor(x)+dx, y: Math.floor(y)+dy, z: Math.floor(z)+dz });
-          if (b?.typeId === "minecraft:chest" && isValidChest(b)) return b;
-        } catch {}
-      }
+  const px    = Math.floor(player.location.x);
+  const py    = Math.floor(player.location.y);
+  const pz    = Math.floor(player.location.z);
+  const dimId = player.dimension.id;
+  const dim   = player.dimension;
+  const RX    = CFG.CHEST_SCAN_R;
+  const RY    = CFG.CHEST_SCAN_Y;
+
+  for (const c of getAllowedChestsCached()) {
+    if (c.dimId !== dimId) continue;
+    if (Math.abs(px - c.x) > RX || Math.abs(py - c.y) > RY || Math.abs(pz - c.z) > RX) continue;
+    try {
+      const b = dim.getBlock({ x: c.x, y: c.y, z: c.z });
+      if (b?.typeId === "minecraft:chest") return b;
+    } catch {}
+  }
   return null;
 }
 
@@ -657,7 +686,7 @@ async function executeGachaIntent(player, intent, block) {
     clearLock(key);
     try { const c = fresh(); if (c) clrBox(c); } catch {}
     lastPull.set(player.id, system.currentTick);
-    const regEntry = getAllowedChests().find(c => c.key === key);
+    const regEntry = getAllowedChestsCached().find(c => c.key === key);
     if (regEntry) system.runTimeout(() => startIdleForChest(key, regEntry.dimId, { x: regEntry.x, y: regEntry.y, z: regEntry.z }, regEntry.type), 5);
   }
 }
@@ -812,7 +841,6 @@ async function showRewardInfo(player, type) {
     .body(body).button("§l Kembali").show(player);
 }
 
-// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showDiscountInput(player, gachaType) {
   const cur  = pendingDisc.get(player.id);
   const hint = cur ? `§aAktif: ${cur.code} (-${cur.pct}%)\n§fKode baru / kosongkan utk hapus:` : "§fMasukkan kode:";
@@ -874,7 +902,7 @@ async function showAdminMenu(player) {
     const codes      = getDiscCodes();
     const reg        = getPlayerReg();
     const pendImps   = Object.keys(reg).filter(id => dpGet(CFG.K_IMPORT_PEND + id, null) !== null).length;
-    const regChests  = getAllowedChests();
+    const regChests  = getAllowedChestsCached();
     const hasStagedImport = dpGet(K_STAGED_IMPORT, null) !== null;
 
     const form = new ActionFormData().title("§l§c  ADMIN PANEL  §r")
@@ -970,7 +998,6 @@ async function showAdminAction(adminPlayer, target, currency) {
   }
 }
 
-// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminAmountInput(adminPlayer, target, currency, action) {
   const isGem  = currency === "gem";
   const curBal = isGem ? getGem(target) : getCoin(target);
@@ -1008,7 +1035,6 @@ async function showAdminAmountInput(adminPlayer, target, currency, action) {
   adminPlayer.sendMessage("§c[Admin] Gagal. Coba lagi."); return false;
 }
 
-// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminActionOffline(adminPlayer, target, currency, reg) {
   const isGem  = currency === "gem";
   const pendKey = isGem ? (K_PEND_GEM + target.id) : (K_PEND_COIN + target.id);
@@ -1062,7 +1088,6 @@ async function showAdminActionOffline(adminPlayer, target, currency, reg) {
   return true;
 }
 
-// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminCreateCode(adminPlayer) {
   const res = await new ModalFormData().title("§l§a  Buat Kode Diskon  §r")
     .textField("§fNama Kode §7(A-Z, 0-9, _ | 3-20 karakter)", "Contoh: HEMAT50", { defaultValue: "" })
@@ -1111,7 +1136,6 @@ async function showAdminListCodes(adminPlayer) {
   await new ActionFormData().title("§l  Daftar Kode  §r").body(body).button("§l Kembali").show(adminPlayer);
 }
 
-// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showAdminRegisterChest(adminPlayer, block = null) {
   if (!adminPlayer.hasTag(CFG.ADMIN_TAG)) { adminPlayer.sendMessage("§c[!] Akses ditolak."); return; }
 
@@ -1135,7 +1159,7 @@ async function showAdminRegisterChest(adminPlayer, block = null) {
   const { x, y, z } = block.location;
   const dimId        = block.dimension.id;
   const typeLbl      = type === "PARTICLE" ? "§5Partikel" : "§6Peralatan";
-  const allowed      = getAllowedChests();
+  const allowed      = getAllowedChestsCached();
 
   if (allowed.some(c => c.key === key)) {
     await new ActionFormData()
@@ -1154,8 +1178,8 @@ async function showAdminRegisterChest(adminPlayer, block = null) {
   if (inputRes.canceled) return;
 
   const label = String(inputRes.formValues?.[0] ?? "").trim() || `${type} @ ${x},${y},${z}`;
-  allowed.push({ key, x, y, z, dimId, type, label });
-  saveAllowedChests(allowed);
+  const newList = [...allowed, { key, x, y, z, dimId, type, label }];
+  saveAllowedChests(newList); // cache diupdate di dalam saveAllowedChests
   startIdleForChest(key, dimId, { x, y, z }, type);
 
   adminPlayer.sendMessage(
@@ -1171,7 +1195,7 @@ async function showAdminManageChests(adminPlayer) {
   if (!adminPlayer.hasTag(CFG.ADMIN_TAG)) { adminPlayer.sendMessage("§c[!] Akses ditolak."); return; }
 
   while (true) {
-    const allowed = getAllowedChests();
+    const allowed = getAllowedChestsCached();
     if (!allowed.length) {
       await new ActionFormData()
         .title("§l  Kelola Chest  §r")
@@ -1219,8 +1243,8 @@ async function showAdminManageChests(adminPlayer) {
       .button1("§7 Batal").button2("§c Ya, Hapus").show(adminPlayer);
 
     if (!confirm.canceled && confirm.selection === 1) {
-      const fresh = getAllowedChests().filter(c => c.key !== target.key);
-      saveAllowedChests(fresh);
+      const fresh = getAllowedChestsCached().filter(c => c.key !== target.key);
+      saveAllowedChests(fresh); // cache diupdate di dalam saveAllowedChests
       stopIdleForChest(target.key);
       dpDel("gacha:chest_snap:" + target.key);
       dpDel("gacha:chest_lock:" + target.key);
@@ -1282,7 +1306,6 @@ async function showExportImportAllUI(adminPlayer) {
   }
 }
 
-// ── FIX: textField arg ke-3 → { defaultValue } ──────────────
 async function showBulkExportUI(adminPlayer) {
   if (!adminPlayer.hasTag(CFG.ADMIN_TAG)) { adminPlayer.sendMessage("§c[!] Akses ditolak."); return; }
   const { entries, full } = buildBulkExport();
@@ -1492,7 +1515,7 @@ if (!world.scoreboard.getObjective(CFG.COIN_OBJ))
   world.scoreboard.addObjective(CFG.COIN_OBJ, "Koin");
   initSecurity(mkItem, (dimId) => world.getDimension(dimId), registerItemDropGuard);
   system.runTimeout(() => {
-    for (const c of getAllowedChests())
+    for (const c of getAllowedChestsCached())
       startIdleForChest(c.key, c.dimId, { x: c.x, y: c.y, z: c.z }, c.type);
   }, 20);
 });
@@ -1504,7 +1527,7 @@ world.afterEvents.playerPlaceBlock.subscribe(ev => {
     try {
       if (!isChestCandidate(block)) return;
       const key = ck(block);
-      const reg = getAllowedChests().find(c => c.key === key);
+      const reg = getAllowedChestsCached().find(c => c.key === key);
       if (reg) startIdleForChest(reg.key, reg.dimId, { x: reg.x, y: reg.y, z: reg.z }, reg.type);
     } catch {}
   }, 5);

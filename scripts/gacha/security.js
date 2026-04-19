@@ -11,8 +11,14 @@ const K_CHEST_LOCK    = "gacha:chest_lock:";       // key per chest → { ownerI
 const K_CHEST_SNAP    = "gacha:chest_snap:";       // snapshot konten terakhir (idle frame)
 
 // ── Interval config ───────────────────────────────────────
-const GLOBAL_GUARD_INT   = 10;  // tick; scan semua chest terdaftar (dinaikkan dari 4 → hemat CPU)
-const INV_SCAN_INT       = 10;  // tick; scan inventory semua player
+// [OPT] GLOBAL_GUARD_INT: 10 → 20 tick (1 detik). Anti-theft masih efektif
+//       karena player tidak bisa mengambil item dari chest dalam < 1 detik.
+const GLOBAL_GUARD_INT   = 20;
+// [OPT] INV_SCAN_INT: 10 → 60 tick (3 detik). Scan inventory jauh lebih jarang.
+//       INV_SCAN_EVERY = round(60/20) = 3, artinya scan setiap 3 guard cycle.
+//       Dengan asumsi normal tidak ada item marked di inventory player,
+//       delay 3 detik untuk mendeteksi theft masih sangat wajar.
+const INV_SCAN_INT       = 60;
 const LOCK_EXPIRE_MS     = 5 * 60 * 1000; // 5 menit dalam ms (pakai Date.now, bukan currentTick)
 
 // ── Helpers ───────────────────────────────────────────────
@@ -162,8 +168,8 @@ export function initSecurity(mkItemFn, getDimFn, registerDropGuardFn) {
   _mkItem = mkItemFn;
 
   // ── Global anti-theft: chest content guard + inventory scan ──────────
-  // INV_SCAN_INT dan GLOBAL_GUARD_INT bisa berbeda, hitung berapa kali guard
-  // harus jalan sebelum scan inventory. Gunakan Math.round agar selalu integer.
+  // [OPT] INV_SCAN_EVERY dihitung ulang dari konstanta baru:
+  //   round(60 / 20) = 3 → scan inventory tiap 3 guard cycle = tiap 60 tick (3 detik).
   const INV_SCAN_EVERY = Math.max(1, Math.round(INV_SCAN_INT / GLOBAL_GUARD_INT));
   let guardCtr = 0;
 
