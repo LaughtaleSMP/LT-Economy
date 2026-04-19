@@ -79,7 +79,7 @@ function addDailyUsed(playerId, amount) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// HISTORY
+// HISTORY — personal per player
 // ═══════════════════════════════════════════════════════════
 function pushHistory(playerId, entry) {
   const hist = dp.get(CFG.K_HIST + playerId, []);
@@ -88,6 +88,17 @@ function pushHistory(playerId, entry) {
 }
 
 const getHistory = (playerId) => dp.get(CFG.K_HIST + playerId, []);
+
+// ═══════════════════════════════════════════════════════════
+// GLOBAL LOG — semua transaksi, 10 terakhir (untuk admin)
+// ═══════════════════════════════════════════════════════════
+function pushGlobalLog(entry) {
+  try {
+    const hist = dp.get(CFG.K_GLOBAL_HIST, []);
+    hist.unshift({ ...entry, ts: entry.ts ?? Date.now() });
+    dp.set(CFG.K_GLOBAL_HIST, hist.slice(0, CFG.MAX_GLOBAL_HIST));
+  } catch (e) { console.warn("[Bank] pushGlobalLog error:", e); }
+}
 
 // ═══════════════════════════════════════════════════════════
 // PENDING NOTIFICATIONS — untuk player yang offline
@@ -170,6 +181,7 @@ const setCooldown   = (p) => bankCooldown.set(p.id, system.currentTick);
 const fmt = (n) => Math.floor(n).toLocaleString("id-ID");
 
 function timeAgo(ts) {
+  if (!ts) return "?";
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60)    return `${s}dtk lalu`;
   if (s < 3600)  return `${Math.floor(s / 60)}mnt lalu`;
@@ -181,7 +193,7 @@ const minsLeft = (req) =>
   Math.max(0, Math.floor((CFG.REQUEST_EXPIRE_MS - (Date.now() - req.createdAt)) / 60_000));
 
 // ═══════════════════════════════════════════════════════════
-// LEADERBOARD — pakai saldo live untuk player online
+// LEADERBOARD
 // ═══════════════════════════════════════════════════════════
 function getCoinLeaderboard(limit = 10) {
   try {
@@ -192,7 +204,6 @@ function getCoinLeaderboard(limit = 10) {
     for (const ident of obj.getParticipants()) {
       try {
         const name = ident.displayName;
-        // Filter entri sistem Bedrock yang bukan nama player asli
         if (!name) continue;
         if (name.startsWith("command.")) continue;
         if (name.includes(".scoreboard.")) continue;
@@ -208,8 +219,6 @@ function getCoinLeaderboard(limit = 10) {
 
 // ═══════════════════════════════════════════════════════════
 // EXECUTE TRANSFER — atomic dengan lock
-// Semua operasi (cek saldo, deduct, tambah, catat limit, history)
-// berjalan di dalam satu lock sehingga tidak bisa race condition.
 // ═══════════════════════════════════════════════════════════
 async function executeTransfer(from, to, amount, note = "") {
   return withLock(from.id, () => {
@@ -229,6 +238,7 @@ async function executeTransfer(from, to, amount, note = "") {
     const ts = Date.now();
     pushHistory(from.id, { type: "sent",     to:   to.name,   amount, tax, note, ts });
     pushHistory(to.id,   { type: "received", from: from.name, amount,       note, ts });
+    pushGlobalLog({ from: from.name, to: to.name, amount, tax, note, ts });
 
     return { ok: true, amount, tax, totalOut };
   });
@@ -267,7 +277,7 @@ async function _menuLoop(player) {
     form.button(`§l Transfer Koin\n§r§7Kirim ke player lain`);                                                         btns.push("transfer");
     form.button(`§l Minta Koin\n§r§7Request dari player lain`);                                                        btns.push("request");
     form.button(`§l Permintaan${reqBadge}\n§r§7${reqs.length ? `${reqs.length} menunggu` : "Tidak ada"}`);            btns.push("inbox");
-    form.button(`§l Riwayat\n§r§7History transaksi`);                                                                  btns.push("history");
+    form.button(`§l Mutasi Saya\n§r§710 transaksi terakhir`);                                                          btns.push("history");
     form.button(`§l Top Koin\n§r§7Leaderboard saldo`);                                                                 btns.push("top");
     if (isAdmin) { form.button(`§l Admin\n§r§cKelola bank`); btns.push("admin"); }
     form.button("§l Tutup"); btns.push("close");
@@ -313,8 +323,8 @@ async function uiTransfer(player) {
   const target = others[res1.selection];
 
   // Step 2: Input jumlah
-  const myCoin   = getCoin(player);
-  const remain   = Math.min(CFG.MAX_TRANSFER, CFG.DAILY_LIMIT - getDailyUsed(player.id));
+  const myCoin = getCoin(player);
+  const remain = Math.min(CFG.MAX_TRANSFER, CFG.DAILY_LIMIT - getDailyUsed(player.id));
 
   const res2 = await new ModalFormData()
     .title(`§l  Transfer ke ${target.name}  §r`)
@@ -537,7 +547,6 @@ async function uiInbox(player) {
     if (detail.canceled) continue;
 
     if (detail.selection === 0) {
-      // Tolak
       removeReq(player.id, req.id);
       playSfx(player, SFX.DECLINE);
       player.sendMessage(`§7[Bank] Request dari §f${req.fromName} §7ditolak.`);
@@ -551,7 +560,6 @@ async function uiInbox(player) {
       continue;
     }
 
-    // Terima — re-check saldo terkini
     if (getCoin(player) < total) {
       player.sendMessage(`§c[Bank] Saldo tidak cukup. Butuh §f${fmt(total)} Koin.`);
       continue;
@@ -559,7 +567,6 @@ async function uiInbox(player) {
 
     const requester = world.getPlayers().find(p => p.id === req.fromId);
     if (!requester) {
-      // Requester offline — tidak bisa transfer, simpan notif
       removeReq(player.id, req.id);
       pushPendingNotif(req.fromId,
         `§e[Bank] §f${player.name} §emau menerima requestmu tapi kamu offline saat itu.\n§8 Kirim request lagi saat kamu online.`
@@ -604,30 +611,50 @@ async function uiInbox(player) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// UI: RIWAYAT
+// UI: MUTASI PRIBADI — 10 transaksi terakhir player
 // ═══════════════════════════════════════════════════════════
 async function uiHistory(player) {
-  const hist = getHistory(player.id);
-  let body   = `${CFG.HR}\n§e Riwayat Transaksi\n${CFG.HR}\n`;
+  // Ambil max 10 entri terakhir dari history personal
+  const hist = getHistory(player.id).slice(0, 10);
+
+  let body = `${CFG.HR}\n§e 10 Mutasi Terakhir Kamu\n${CFG.HR}\n`;
 
   if (!hist.length) {
-    body += "§7 Belum ada riwayat.\n";
+    body += "\n§7 Belum ada riwayat transaksi.\n";
   } else {
-    for (const h of hist) {
-      if (h.type === "sent") {
-        body += `§c- §f${fmt(h.amount + (h.tax ?? 0))} §7ke §f${h.to}`;
-        if (h.note) body += `§8 (${h.note})`;
+    for (let i = 0; i < hist.length; i++) {
+      const h = hist[i];
+      const isSent = h.type === "sent";
+
+      // Nomor urut
+      body += `\n§7${i + 1}. `;
+
+      if (isSent) {
+        // Transfer keluar
+        const totalKeluar = h.amount + (h.tax ?? 0);
+        body += `§c▼ Kirim §fke §a${h.to ?? "?"}\n`;
+        body += `§7   Jumlah : §c-${fmt(totalKeluar)} Koin`;
+        if ((h.tax ?? 0) > 0)
+          body += ` §8(pajak §c${fmt(h.tax)}§8)`;
       } else {
-        body += `§a+ §f${fmt(h.amount)} §7dari §f${h.from}`;
-        if (h.note) body += `§8 (${h.note})`;
+        // Transfer masuk
+        body += `§a▲ Terima §fdari §a${h.from ?? "?"}\n`;
+        body += `§7   Jumlah : §a+${fmt(h.amount)} Koin`;
       }
+
+      if (h.note && h.note.trim()) {
+        body += `\n§7   Catatan: §f${h.note}`;
+      }
+
       body += `\n§8   ${timeAgo(h.ts)}\n`;
     }
   }
 
+  body += `\n${CFG.HR}`;
+
   await new ActionFormData()
-    .title("§l  Riwayat  §r")
-    .body(body + CFG.HR)
+    .title("§l  Mutasi Saya  §r")
+    .body(body)
     .button("§l Kembali")
     .show(player);
 }
@@ -680,11 +707,12 @@ async function uiAdmin(player) {
       .button("§l Reset Limit Harian")
       .button("§l Hapus Riwayat")
       .button("§l Lihat Saldo")
+      .button("§l Log Mutasi Global")
       .button("§l Kembali");
 
     playSfx(player, SFX.ADMIN);
     const res = await form.show(player);
-    if (res.canceled || res.selection === 6) return;
+    if (res.canceled || res.selection === 7) return;
 
     if (res.selection === 0) await adminGiveCoin(player);
     if (res.selection === 1) await adminDeductCoin(player);
@@ -692,7 +720,36 @@ async function uiAdmin(player) {
     if (res.selection === 3) await adminResetDaily(player);
     if (res.selection === 4) await adminClearHistory(player);
     if (res.selection === 5) await adminViewBalances(player);
+    if (res.selection === 6) await adminViewGlobalLog(player);
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI: ADMIN — LOG MUTASI GLOBAL (10 terakhir)
+// ═══════════════════════════════════════════════════════════
+async function adminViewGlobalLog(admin) {
+  const hist = dp.get(CFG.K_GLOBAL_HIST, []);
+  let body   = `${CFG.HR}\n§e 10 Mutasi Terakhir (Global)\n${CFG.HR}\n`;
+
+  if (!hist.length) {
+    body += "\n§7 Belum ada mutasi tercatat.\n";
+  } else {
+    for (let i = 0; i < hist.length; i++) {
+      const h      = hist[i];
+      const taxInfo = (h.tax ?? 0) > 0 ? ` §8(pajak §c${fmt(h.tax)}§8)` : "";
+      body +=
+        `\n§f${i + 1}. §a${h.from ?? "?"} §7→ §c${h.to ?? "?"}\n` +
+        `§7   Jumlah : §e${fmt(h.amount)} Koin${taxInfo}\n` +
+        (h.note && h.note.trim() ? `§7   Catatan: §f${h.note}\n` : "") +
+        `§8   ${timeAgo(h.ts)}\n`;
+    }
+  }
+
+  await new ActionFormData()
+    .title("§l  Log Mutasi Global  §r")
+    .body(body + CFG.HR)
+    .button("§l Kembali")
+    .show(admin);
 }
 
 async function adminGiveCoin(admin) {
@@ -734,10 +791,9 @@ async function adminDeductCoin(admin) {
   const tgt = world.getPlayers().find(p => p.id === target.id);
   if (!tgt) { admin.sendMessage("§c[Bank] Player sudah offline."); return; }
 
-  // Gunakan lock agar tidak race condition dengan transaksi player
   const deducted = await withLock(tgt.id, () => {
-    const before   = getCoin(tgt);
-    const actual   = Math.min(before, amount);
+    const before = getCoin(tgt);
+    const actual = Math.min(before, amount);
     setCoin(tgt, before - actual);
     return actual;
   });
@@ -753,16 +809,21 @@ async function adminSetTax(admin) {
   const settings = getSettings();
   const res = await new ModalFormData()
     .title("§l  Ubah Pajak  §r")
-    .slider(`§f Pajak §7(saat ini: §f${settings.taxPct}%§7)`, 0, 50, 1, settings.taxPct)
+    .slider(
+      `§f Pajak §7(saat ini: §f${settings.taxPct}%§7)`,
+      0,
+      50,
+      { valueStep: 1, defaultValue: settings.taxPct }
+    )
     .show(admin);
- 
+
   if (res.canceled) return;
- 
+
   const newTax = Math.floor(Number(res.formValues?.[0] ?? settings.taxPct));
   if (!Number.isFinite(newTax) || newTax < 0 || newTax > 50) {
     admin.sendMessage("§c[Bank] Nilai pajak tidak valid."); return;
   }
- 
+
   settings.taxPct = newTax;
   saveSettings(settings);
   playSfx(admin, SFX.ADMIN);
@@ -891,10 +952,8 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
       const live = world.getPlayers().find(p => p.id === player.id);
       if (!live) return;
 
-      // Kirim notifikasi tertunda (request ditolak dll saat offline)
       flushPendingNotifs(live);
 
-      // Notif request masuk
       const reqs = getIncomingReqs(live.id);
       if (reqs.length > 0) {
         playSfx(live, SFX.REQUEST);
