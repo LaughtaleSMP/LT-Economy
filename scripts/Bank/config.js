@@ -10,8 +10,8 @@ export const CFG = {
   // ── Transfer ─────────────────────────────────────────────
   TAX_PERCENT:        5,         // Pajak bawaan (%) — admin bisa ubah via menu
   MIN_TRANSFER:       10,        // Minimal koin per transaksi
-  MAX_TRANSFER:       999_999,   // Maksimal koin per transaksi
-  DAILY_LIMIT:        500_000,   // Batas total transfer keluar per hari (reset tiap hari)
+  MAX_TRANSFER:       5_000,   // Maksimal koin per transaksi
+  DAILY_LIMIT:        25_000,   // Batas total transfer keluar per hari (reset tiap hari)
 
   // ── Cooldown ─────────────────────────────────────────────
   COOLDOWN_TICKS:     80,        // Cooldown buka menu bank (~4 detik @20tps)

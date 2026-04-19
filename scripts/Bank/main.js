@@ -938,7 +938,7 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
       const reqs = getIncomingReqs(live.id);
       if (reqs.length > 0)
         live.sendMessage(
-          `§e[Bank] 📨 Kamu punya §f${reqs.length} §epermintaan koin masuk!\n§7Ketik §f/bank §7→ §fPermintaan Masuk §7untuk melihatnya.`
+          `§e[Bank] Kamu punya §f${reqs.length} §epermintaan koin masuk!\n§7Ketik §f/bank §7→ §fPermintaan Masuk §7untuk melihatnya.`
         );
     } catch {}
   }, 100);
