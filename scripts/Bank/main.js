@@ -238,7 +238,7 @@ async function _menuLoop(player) {
 
     const btns = [];
     const form = new ActionFormData()
-      .title("§l§6  🏦 BANK KOIN  §r")
+      .title("§l§6BANK KOIN  §r")
       .body(body);
 
     form.button(`§l Transfer Koin\n§r§7Kirim koin ke player lain`);        btns.push("transfer");
@@ -358,7 +358,7 @@ async function uiTransfer(player) {
       (note ? `§fCatatan       : §7${note}\n` : "") +
       `${CFG.HR}`
     )
-    .button1("§7  Batal")
+    .button1("Batal")
     .button2("§a  ✔ Transfer Sekarang")
     .show(player);
 
@@ -663,7 +663,7 @@ async function uiLeaderboard(player) {
   body += `${CFG.HR}\n§a● §7= online  §8○ §7= offline`;
 
   await new ActionFormData()
-    .title("§l  🏆 Top Koin  §r")
+    .title("§lTop Koin  §r")
     .body(body)
     .button("§l ← Kembali")
     .show(player);
