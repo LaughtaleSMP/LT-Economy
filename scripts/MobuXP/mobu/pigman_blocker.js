@@ -21,11 +21,8 @@ function tryRemove(entity) {
 function handle(entity, source) {
   try {
     if (!isValid(entity)) return
-    const { x, y, z } = entity.location
-    const typeId = entity.typeId
     tryRemove(entity)
-    console.warn(`[Pigman Blocker][${source}] Removed ${typeId} at (${Math.round(x)}, ${Math.round(y)}, ${Math.round(z)})`)
-  } catch { /* entity invalid mid-execution, skip */ }
+  } catch {}
 }
 
 // Tangkap spawn baru — block di overworld & the_end, biarkan di nether
@@ -54,4 +51,4 @@ system.runInterval(() => {
       console.warn(`[Pigman Blocker] Scan error (${dimId}):`, e)
     }
   }
-}, 20)
+}, 100)

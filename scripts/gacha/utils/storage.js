@@ -1,5 +1,6 @@
 import { world } from "@minecraft/server";
 import { CFG } from "../config.js";
+import { getByteLength } from "../../dp_manager.js";
 
 const MAX_CHUNK_SCAN = 32;
 // [FIX BUG-7] Batas aman sebelum dpSet peringatkan admin.
@@ -53,8 +54,9 @@ export const dpGet = (k, def) => {
 export const dpSet = (k, v) => {
   try {
     const str = JSON.stringify(v);
-    if (str.length > DP_SIZE_WARN) {
-      console.warn(`[Gacha] dpSet WARNING: "${k}" ukuran ${str.length} chars melebihi batas aman! Gunakan dpSetChunked untuk data besar.`);
+    const byteLen = getByteLength(str);
+    if (byteLen > DP_SIZE_WARN) {
+      console.warn(`[Gacha] dpSet WARNING: "${k}" ${byteLen} bytes melebihi batas aman! Gunakan dpSetChunked untuk data besar.`);
     }
     world.setDynamicProperty(k, str);
   } catch (e) { console.error("[Gacha] dpSet gagal untuk key:", k, e); }

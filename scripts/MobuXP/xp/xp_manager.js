@@ -81,9 +81,7 @@ const CONFIG = { ...CONFIG_DEFAULTS, ..._RAW_CONFIG };
   ];
   const missing = required.filter(k => _RAW_CONFIG[k] === undefined || _RAW_CONFIG[k] === null);
   if (missing.length > 0) {
-    console.warn(`[XP Manager] ⚠ xp_config.js TIDAK LENGKAP — key hilang: ${missing.join(", ")}. Nilai default dipakai.`);
-  } else {
-    console.log(`[XP Manager] xp_config.js OK.`);
+    console.warn(`[XP] Config incomplete — missing: ${missing.join(", ")}`);
   }
 })();
 
@@ -127,9 +125,10 @@ function getDailyTotal(playerId) {
   return data.total;
 }
 
-function addDailyTotal(playerId, amount) {
+// [PERF] addDailyTotal: terima cached raw untuk hindari baca DP ulang.
+function addDailyTotal(playerId, amount, cachedData) {
   const period = getCurrentPeriod();
-  const data   = getDailyData(playerId);
+  const data   = cachedData ?? getDailyData(playerId);
   if (data.period !== period) {
     setDailyData(playerId, { period, total: amount });
   } else {
@@ -145,8 +144,8 @@ function getCoinChance(dailyTotal) {
 
 function getSoftCapLabel(dailyTotal) {
   if (dailyTotal <= SOFTCAP_PHASE1) return null;
-  if (dailyTotal <= SOFTCAP_PHASE2) return "§7[§eSlow§7]";
-  return "§7[§cDim§7]";
+  if (dailyTotal <= SOFTCAP_PHASE2) return "§8[§eSlow§8]";
+  return "§8[§cDim§8]";
 }
 
 // ============================================================
@@ -227,9 +226,9 @@ function playKillSound(player) {
 
 // ============================================================
 // GIVE COINS — dengan soft cap probabilitas
-// [OPT] Sekarang mengembalikan { given, newTotal } agar caller tidak perlu
-// memanggil getDailyTotal() lagi secara terpisah (menghilangkan 1 extra DP read
-// per kill saat bonus triggered = hemat 1 getDynamicProperty tiap mob mati).
+// [OPT] getDailyData dipanggil SEKALI, reuse di getDailyTotal + addDailyTotal.
+// Sebelumnya: 2 DP reads (getDailyTotal + addDailyTotal baca lagi).
+// Sekarang: 1 DP read + 1 DP write = hemat 1 read per kill.
 // ============================================================
 function giveCoinsWithCap(player, amount) {
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -240,12 +239,15 @@ function giveCoinsWithCap(player, amount) {
     console.error(`[XP Manager] giveCoins GAGAL: coin_scoreboard tidak valid.`);
     return { given: 0, newTotal: 0 };
   }
-  const dailyTotal = getDailyTotal(player.id);
+  // [PERF] Baca raw data 1x, reuse di chance check + addDailyTotal
+  const rawData    = getDailyData(player.id);
+  const period     = getCurrentPeriod();
+  const dailyTotal = rawData.period === period ? rawData.total : 0;
   const chance     = getCoinChance(dailyTotal);
   if (Math.random() >= chance) return { given: 0, newTotal: dailyTotal };
   const given = Math.floor(amount);
   player.runCommand(`scoreboard players add @s ${scoreboard} ${given}`);
-  addDailyTotal(player.id, given);
+  addDailyTotal(player.id, given, rawData);
   return { given, newTotal: dailyTotal + given };
 }
 
@@ -272,14 +274,14 @@ function coinBonusForTier(tierLabel) {
 // ============================================================
 function buildActionbarMsg(streak, bonusTier, coinGiven, dailyTotal) {
   const killPart  = `§f⚔ §e${streak} Kill`;
-  const coinPart  = coinGiven > 0 ? ` §7| §6+${coinGiven} Koin` : "";
+  const coinPart  = coinGiven > 0 ? ` §8| §6+${coinGiven}⛃` : "";
   const capLabel  = getSoftCapLabel(dailyTotal);
   const capPart   = capLabel ? ` ${capLabel}` : "";
 
   if (bonusTier) {
     const tierColor = tierLabelColor(bonusTier.label);
-    const bonusPart = `${tierColor}❆ ${bonusTier.label}! §f+${bonusTier.xp} XP`;
-    return `${killPart} §7| ${bonusPart}${coinPart}${capPart}`;
+    const bonusPart = `${tierColor}✦ ${bonusTier.label}! §f+${bonusTier.xp} XP`;
+    return `${killPart} §8| ${bonusPart}${coinPart}${capPart}`;
   }
   return `${killPart}${coinPart}${capPart}`;
 }
@@ -305,8 +307,6 @@ function broadcastMilestone(playerName, streak) {
   const template = CONFIG.streak_milestone_messages[streak];
   if (!template) return;
   world.sendMessage(template.replace("{player}", playerName).replace("{streak}", streak));
-  if (streak === LOG_MILESTONE_THRESHOLD)
-    console.log(`[XP Manager] MILESTONE ${streak} — Player: ${playerName}`);
 }
 
 // ============================================================
@@ -343,13 +343,12 @@ function checkAndCleanStack(player, dimension, pos) {
     if (removed > 0) {
       const penalty      = CONFIG.mob_stack_coin_penalty;
       const totalPenalty = removed * penalty;
-      console.warn(`[XP Manager] Anti-Stack: ${removed} mob — Player: ${player.name}${penalty > 0 ? ` | Penalty: -${totalPenalty} koin` : ""}`);
       if (Number.isFinite(penalty) && penalty > 0) {
         takeCoins(player, totalPenalty);
         if (CONFIG.mob_stack_warn)
-          player.sendMessage(`§7[§cAnti-Stack§7] §f${removed} §emob excess dihapus! §cPenalty: -${totalPenalty} koin.`);
+          player.sendMessage(`§8[§cAnti-Stack§8] §f${removed} §emob excess dihapus! §c-${totalPenalty}⛃`);
       } else if (CONFIG.mob_stack_warn) {
-        player.sendMessage(`§7[§cAnti-Stack§7] §f${removed} §emob excess dihapus.`);
+        player.sendMessage(`§8[§cAnti-Stack§8] §f${removed} §emob excess dihapus.`);
       }
     }
   } catch (e) { console.warn("[XP Manager] checkAndCleanStack error:", e); }
@@ -439,21 +438,9 @@ world.afterEvents.entityDie.subscribe((event) => {
 
       // dailyFinal sudah di-return dari giveCoinsWithCap, tidak perlu baca lagi
       setBar(player, buildActionbarMsg(streak, tier, coinTotal, dailyFinal), 5, 60);
-
-      if (tier.label === "Jackpot") {
-        console.log(`[XP Manager] JACKPOT! ${mobId} | Bonus: +${tier.xp} XP | Streak: ${streak} | Player: ${playerName}`);
-      }
     } else {
       setBar(player, buildActionbarMsg(streak, null, coinGivenBase, dailyAfterBase), 5, 60);
     }
   });
 });
-
-console.log(
-  `[XP Manager] Aktif!` +
-  ` | Multiplier: ${CONFIG.xp_multiplier_percent}%` +
-  ` | Soft Cap: ${SOFTCAP_PHASE1} (100%) → ${SOFTCAP_PHASE2} (30%) → ∞ (10%)` +
-  ` | Reset: 20:00 WIB` +
-  ` | Anti-Stack: limit=${CONFIG.mob_stack_limit} radius=${CONFIG.mob_stack_radius}blok` +
-  ` | Whitelist: ${WHITELIST.size} mob`
-);
+

@@ -9,6 +9,7 @@ import {
   snapshotExpected,
   registerSecureChestHandler,
   registerItemDropGuard,
+  invalidateSecChestCache,
 } from "./security.js";
 
 import {
@@ -41,6 +42,7 @@ import {
   applyImport, applyImportOffline, applyPendingImport,
   buildBulkExport, logBulkToConsole, parseBulkImport, applyBulkAll,
   bulkEntryToIndividual, getLeaderboard,
+  fxRollingSpiral, fxRevealBurst, fxLegendaryStorm, fxSlotPop, fxPaySparkle,
 } from "./data.js";
 
 // ═══════════════════════════════════════════════════════════
@@ -69,6 +71,7 @@ function getAllowedChests() { return getAllowedChestsCached(); }
 function saveAllowedChests(list) {
   _allowedChestCache = list; // update cache sekaligus agar tidak stale
   dpSet(K_REG_CHESTS, list);
+  invalidateSecChestCache(); // [OPT] juga invalidate cache security module
 }
 
 const idleGuards = new Map();
@@ -156,7 +159,8 @@ function nearbyValidChestCached(player) {
 const IDLE_BORDER    = [0,1,2,3,4,5,6,7,8, 17, 26,25,24,23,22,21,20,19,18, 9];
 const IDLE_INNER     = [10,11,12,14,15,16];
 const IDLE_CENTER    = 13;
-const IDLE_ANIM_INT  = 5;
+// [OPT] 5→10 tick interval: halves container write rate while keeping smooth comet.
+const IDLE_ANIM_INT  = 10;
 const IDLE_COMET_LEN = 5;
 
 function startIdleForChest(key, dimId, loc, type) {
@@ -190,7 +194,73 @@ function startIdleForChest(key, dimId, loc, type) {
 function stopIdleForChest(key) {
   const id = idleGuards.get(key);
   if (id !== undefined) { system.clearRun(id); idleGuards.delete(key); }
+  _lastSnapLabel.delete(key); // [OPT] cleanup snapshot label tracker
+  invalidateSlotCache(key);   // [PERF] reset slot diff cache on stop
 }
+
+// ═══════════════════════════════════════════════════════════
+// PARTICLE IDLE — DNA Double Helix (dragon breath)
+// 2 untai spiral mengelilingi chest.
+// [PERF] 4 tick interval, 2 partikel/chest/frame, view dist² 400.
+// [OPT] Reduced from 4→2 particles/frame + interval 2→4 ticks
+//       = 75% reduction in spawnParticle calls.
+//       Players list & dimension lookup cached per frame.
+// ═══════════════════════════════════════════════════════════
+const PI2 = Math.PI * 2;
+let _idleFrame = 0;
+
+system.runInterval(() => {
+  const chests = getAllowedChestsCached();
+  if (chests.length === 0) return;
+
+  const players = world.getPlayers();
+  if (players.length === 0) return;
+
+  _idleFrame++;
+  const vd2 = 400; // 20 block view distance squared
+
+  // [OPT] Cache dimension lookup per dimId to avoid redundant getDimension calls
+  const dimCache = new Map();
+
+  for (const c of chests) {
+    if (activeChests.has(c.key)) continue;
+
+    const cx = c.x + 0.5, cy = c.y + 0.2, cz = c.z + 0.5;
+    let near = false;
+    for (const p of players) {
+      if (p.dimension.id !== c.dimId) continue;
+      const dx = p.location.x - cx, dy = p.location.y - cy, dz = p.location.z - cz;
+      if (dx * dx + dy * dy + dz * dz <= vd2) { near = true; break; }
+    }
+    if (!near) continue;
+
+    let dim = dimCache.get(c.dimId);
+    if (!dim) { dim = world.getDimension(c.dimId); dimCache.set(c.dimId, dim); }
+
+    // Rotasi ganti arah: sin membuat sudut berayun CW ↔ CCW
+    const ang = Math.sin(_idleFrame * 0.015) * _idleFrame * 0.12;
+    const r = 0.6;
+    const h1 = (_idleFrame * 0.02) % 1.8;
+    const h2 = ((_idleFrame * 0.02) + 0.9) % 1.8;
+
+    try {
+      // [OPT] 2 strands only (A + B, 180° apart) — still looks like DNA helix
+      // Reduced from 4 strands to halve spawnParticle calls per chest.
+      // ── Strand A ──
+      dim.spawnParticle("minecraft:dragon_breath_trail", {
+        x: cx + Math.cos(ang) * r,
+        y: cy + h1,
+        z: cz + Math.sin(ang) * r,
+      });
+      // ── Strand B — offset 180° ──
+      dim.spawnParticle("minecraft:dragon_breath_trail", {
+        x: cx + Math.cos(ang + Math.PI) * r,
+        y: cy + h2,
+        z: cz + Math.sin(ang + Math.PI) * r,
+      });
+    } catch {}
+  }
+}, 8); // [PERF] 4 → 8 tick: -50% spawnParticle calls, helix still smooth
 
 // ═══════════════════════════════════════════════════════════
 // CHEST DRAWING
@@ -208,6 +278,32 @@ function fillGlass(container, key, id) {
   for (let i = 0; i < 27; i++) setSlot(container, key, i, id, " ");
 }
 
+// [OPT] _lastSnapLabel tracks last center label per chest to avoid redundant dpSet.
+// snapshotExpected only fires when the center label actually changes (~every 25 frames)
+// instead of every single drawIdleFrame call. This reduces DP writes by ~96%.
+const _lastSnapLabel = new Map();
+
+// [PERF] Per-chest slot state cache — avoid setItem when content hasn't changed.
+// Key: chestKey → Array(27) of "typeId|nameTag" strings (null = unknown/empty)
+// On a typical idle frame only 1-6 slots change (comet head + inner flash),
+// so ~80% of the 27 setSlot calls per frame are skipped.
+const _slotStateCache = new Map();
+
+function getSlotCache(key) {
+  if (!_slotStateCache.has(key)) _slotStateCache.set(key, new Array(27).fill(null));
+  return _slotStateCache.get(key);
+}
+
+function setSlotIfChanged(container, key, slot, typeId, label) {
+  const tag = typeId + "|" + label;
+  const cache = getSlotCache(key);
+  if (cache[slot] === tag) return; // no change — skip ItemStack alloc + write
+  cache[slot] = tag;
+  setSlot(container, key, slot, typeId, label);
+}
+
+function invalidateSlotCache(key) { _slotStateCache.delete(key); }
+
 function drawIdleFrame(container, key, type, frame) {
   if (!container) return;
   const isPt = type === "PARTICLE";
@@ -218,6 +314,7 @@ function drawIdleFrame(container, key, type, frame) {
   const hiIn  = isPt ? "minecraft:blue_stained_glass_pane"    : "minecraft:light_gray_stained_glass_pane";
   const icon  = isPt ? "minecraft:amethyst_shard"             : "minecraft:nether_star";
 
+  // [PERF] setSlotIfChanged: skip ItemStack alloc+write if slot content unchanged
   const head = frame % IDLE_BORDER.length;
   for (let bi = 0; bi < IDLE_BORDER.length; bi++) {
     const slot = IDLE_BORDER[bi];
@@ -226,11 +323,11 @@ function drawIdleFrame(container, key, type, frame) {
     if      (dist === 0)            g = hiTip;
     else if (dist < IDLE_COMET_LEN) g = hiMid;
     else                            g = bg;
-    setSlot(container, key, slot, g, " ");
+    setSlotIfChanged(container, key, slot, g, " ");
   }
 
   const innerOn = Math.floor(frame / 10) % 2 === 0;
-  for (const s of IDLE_INNER) setSlot(container, key, s, innerOn ? hiIn : bg, " ");
+  for (const s of IDLE_INNER) setSlotIfChanged(container, key, s, innerOn ? hiIn : bg, " ");
 
   const ptL = [
     "§r§5§l✦ GACHA PARTIKEL",
@@ -243,9 +340,14 @@ function drawIdleFrame(container, key, type, frame) {
     "§r§f§l★ Klik untuk mulai!",
   ];
   const lbl = (isPt ? ptL : eqL)[Math.floor(frame / 25) % 3];
-  setSlot(container, key, IDLE_CENTER, icon, lbl);
+  setSlotIfChanged(container, key, IDLE_CENTER, icon, lbl);
 
-  snapshotExpected(key);
+  // [OPT] Only snapshot when center label actually changes.
+  const prevLbl = _lastSnapLabel.get(key);
+  if (prevLbl !== lbl) {
+    _lastSnapLabel.set(key, lbl);
+    snapshotExpected(key);
+  }
 }
 
 function drawIdle(container, key, type) {
@@ -260,12 +362,15 @@ function shuffleArr(arr) {
   return arr;
 }
 
-function startRolling(container, key, player, type) {
+function startRolling(container, key, player, type, chestLoc) {
   if (!container) return { clear: () => {} };
   const isPt = type === "PARTICLE";
   const IDS  = shuffleArr(isPt ? PT_POOL.map(p => p.visual) : EQ_POOL.map(p => p.id));
   const bg   = isPt ? "minecraft:purple_stained_glass_pane" : "minecraft:light_blue_stained_glass_pane";
   fillGlass(container, key, bg);
+
+  // [FX] Rolling spiral particles around the chest
+  const spiralFx = chestLoc ? fxRollingSpiral(player.dimension, chestLoc, type, CFG.ANIM_TICKS) : null;
 
   let tick = 0, off = Math.floor(Math.random() * IDS.length), handle = -1;
   const step = () => {
@@ -284,10 +389,10 @@ function startRolling(container, key, player, type) {
     if (tick < CFG.ANIM_TICKS) handle = system.runTimeout(step, interval);
   };
   handle = system.runTimeout(step, 2);
-  return { clear: () => { if (handle >= 0) { system.clearRun(handle); handle = -1; } } };
+  return { clear: () => { if (handle >= 0) { system.clearRun(handle); handle = -1; } spiralFx?.clear(); } };
 }
 
-function reveal1x(container, item, key, player, type) {
+function reveal1x(container, item, key, player, type, chestLoc) {
   const { color, glass, label } = R[item.rarity];
   const itemId = type === "PARTICLE" ? item.visual : item.id;
   fillGlass(container, key, glass);
@@ -298,10 +403,16 @@ function reveal1x(container, item, key, player, type) {
   setSlot(container, key, SLOT.B, glass, `${color}§l✦ [ ${label.toUpperCase()} ]`);
   sfx(player, item.isDup ? SFX.DUP : SFX.REVEAL[item.rarity]);
   sfxArea(player.location, player.dimension, item.isDup ? SFX.DUP : SFX.REVEAL[item.rarity], player.id);
+
+  // [FX] Reveal burst wave + legendary storm
+  if (chestLoc) {
+    fxRevealBurst(player.dimension, chestLoc, item.rarity);
+    if (item.rarity === "LEGENDARY" && !item.isDup) fxLegendaryStorm(player.dimension, chestLoc);
+  }
   if (item.rarity === "LEGENDARY" && !item.isDup) system.runTimeout(() => { sfx(player, SFX.LEG2); sfxArea(player.location, player.dimension, SFX.LEG2, player.id); }, 10);
 }
 
-async function reveal10x(container, results, key, player, type) {
+async function reveal10x(container, results, key, player, type, chestLoc) {
   fillGlass(container, key, "minecraft:gray_stained_glass_pane");
   for (let i = 0; i < results.length - 1; i++) {
     await wait(CFG.REVEAL_INT);
@@ -310,6 +421,8 @@ async function reveal10x(container, results, key, player, type) {
     setSlot(container, key, i, itemId, `${color}[${r.rarity[0]}] §f${r.name}${r.isDup ? " (D)" : ""}`);
     sfx(player, r.isDup ? SFX.DUP : SFX.REVEAL[r.rarity]);
     sfxArea(player.location, player.dimension, r.isDup ? SFX.DUP : SFX.REVEAL[r.rarity], player.id);
+    // [FX] Mini pop per slot reveal
+    if (chestLoc) fxSlotPop(player.dimension, chestLoc, r.rarity);
   }
   await wait(CFG.REVEAL_PAUSE);
   const best = results[results.length - 1];
@@ -322,6 +435,12 @@ async function reveal10x(container, results, key, player, type) {
   setSlot(container, key, SLOT.B, bg, `${bc}§l ★ TERBAIK: ${bl.toUpperCase()}`);
   sfx(player, best.isDup ? SFX.DUP : SFX.REVEAL[best.rarity], SFX.REVEAL[best.rarity].pitch * .75);
   sfxArea(player.location, player.dimension, best.isDup ? SFX.DUP : SFX.REVEAL[best.rarity], player.id);
+
+  // [FX] Final best-item burst wave + legendary storm
+  if (chestLoc) {
+    fxRevealBurst(player.dimension, chestLoc, best.rarity);
+    if (best.rarity === "LEGENDARY" && !best.isDup) fxLegendaryStorm(player.dimension, chestLoc);
+  }
   if (best.rarity === "LEGENDARY" && !best.isDup) system.runTimeout(() => { sfx(player, SFX.LEG2); sfxArea(player.location, player.dimension, SFX.LEG2, player.id); }, 10);
 }
 
@@ -606,9 +725,11 @@ async function executeGachaIntent(player, intent, block) {
   const sessRefKey = K_SESS_REF + player.id;
   dpSet(sessRefKey, { type, cost });
 
-  sfx(player, SFX.PAY);
-
   const loc   = { ...chestBlock.location };
+
+  sfx(player, SFX.PAY);
+  // [FX] Payment sparkle
+  fxPaySparkle(dim, loc, type);
   const fresh = () => {
     try {
       const b = dim.getBlock(loc);
@@ -655,7 +776,7 @@ async function executeGachaIntent(player, intent, block) {
 
     const c = fresh();
     if (!c) throw new Error("Chest hilang.");
-    await doGacha(player, c, key, type, is10x, baseCost);
+    await doGacha(player, c, key, type, is10x, baseCost, loc);
 
   } catch (err) {
     const isStillOnline = world.getPlayers().some(p => p.id === player.id);
@@ -691,17 +812,17 @@ async function executeGachaIntent(player, intent, block) {
   }
 }
 
-async function doGacha(player, container, key, type, is10x, baseCost) {
+async function doGacha(player, container, key, type, is10x, baseCost, chestLoc) {
   const rollFn = type === "PARTICLE" ? rollPt : rollEq;
   const statsK = type === "PARTICLE" ? CFG.K_PT_STATS : CFG.K_EQ_STATS;
   while (true) {
     const rawResults     = is10x ? rollMany(rollFn, player, 10) : [rollFn(player)];
     const displayResults = preCheckDupBatch(player, rawResults, type);
-    const anim = startRolling(container, key, player, type);
+    const anim = startRolling(container, key, player, type, chestLoc);
     await wait(CFG.ANIM_TICKS + 5);
     anim.clear();
-    if (is10x) await reveal10x(container, displayResults, key, player, type);
-    else        reveal1x(container, displayResults[0], key, player, type);
+    if (is10x) await reveal10x(container, displayResults, key, player, type, chestLoc);
+    else        reveal1x(container, displayResults[0], key, player, type, chestLoc);
     await wait(is10x ? 70 : 50);
     const results = rawResults.map(r => applyReward(player, r, type));
     results.sort((a, b) => R_KEYS.indexOf(a.rarity) - R_KEYS.indexOf(b.rarity));
@@ -717,6 +838,7 @@ async function doGacha(player, container, key, type, is10x, baseCost) {
     const ok = await withLock(player.id, async () => deduct(type, player, baseCost));
     if (!ok) { sfx(player, SFX.BROKE); await showNoBal(player, baseCost, type); break; }
     sfx(player, SFX.PAY);
+    if (chestLoc) fxPaySparkle(player.dimension, chestLoc, type);
     for (let i = 0; i < 3; i++) { await wait(8); sfx(player, SFX.TICK, 1.5 - i * 0.3); }
   }
 }
@@ -1119,7 +1241,7 @@ async function showAdminDeleteCode(adminPlayer) {
   const targetCode = codes[res.selection];
   const confirm = await new MessageFormData().title("§l  Konfirmasi  §r")
     .body(`§f Hapus kode §c${targetCode}§f?`)
-    .button1("§7  Batal").button2("§c  Ya, Hapus").show(adminPlayer);
+    .button1("§f  Batal").button2("§c  Ya, Hapus").show(adminPlayer);
   if (!confirm.canceled && confirm.selection === 1) {
     const fresh = getDiscCodes(); delete fresh[targetCode]; saveDiscCodes(fresh);
     adminPlayer.sendMessage(`§a[Admin] Kode §f${targetCode} §adihapus.`);
@@ -1217,7 +1339,7 @@ async function showAdminManageChests(adminPlayer) {
     for (const c of allowed) {
       const typeLbl = c.type === "PARTICLE" ? "§5[PT]" : "§6[EQ]";
       const inUse   = activeChests.has(c.key) ? " §c[AKTIF]" : "";
-      form.button(`${typeLbl} §f${c.label}${inUse}\n§7${c.x}, ${c.y}, ${c.z}`);
+      form.button(`${typeLbl} §f${c.label}${inUse}\n§b${c.x}, ${c.y}, ${c.z}`);
     }
     form.button("§l Kembali");
 
@@ -1240,7 +1362,7 @@ async function showAdminManageChests(adminPlayer) {
         `${typeLbl}§f — ${target.label}\n§7${target.x}, ${target.y}, ${target.z}\n\n` +
         `§c⚠ Chest ini tidak bisa dipakai gacha setelah dihapus.`
       )
-      .button1("§7 Batal").button2("§c Ya, Hapus").show(adminPlayer);
+      .button1("§f Batal").button2("§c Ya, Hapus").show(adminPlayer);
 
     if (!confirm.canceled && confirm.selection === 1) {
       const fresh = getAllowedChestsCached().filter(c => c.key !== target.key);
@@ -1282,7 +1404,7 @@ async function showExportImportAllUI(adminPlayer) {
       .button("§l Export Data")
       .button(hasStagedImport ? "§l§c Import Data §e[SIAP ⚡]" : "§l Import Data")
       .button("§l Pending Import")
-      .button(hasStagedImport ? "§l§7 Hapus Data Staged" : "§8 Hapus Data Staged")
+      .button(hasStagedImport ? "§l§f Hapus Data Staged" : "§8 Hapus Data Staged")
       .button("§l Kembali");
 
     sfx(adminPlayer, SFX.ADMIN);
@@ -1296,7 +1418,7 @@ async function showExportImportAllUI(adminPlayer) {
       const confirm = await new MessageFormData()
         .title("§l  Hapus Data Staged?  §r")
         .body(`§f Hapus data import yang sedang disiapkan?\n§7Data ini tidak akan diterapkan.`)
-        .button1("§7 Batal").button2("§c Ya, Hapus").show(adminPlayer);
+        .button1("§f Batal").button2("§c Ya, Hapus").show(adminPlayer);
       if (!confirm.canceled && confirm.selection === 1) {
         dpDel(K_STAGED_IMPORT);
         adminPlayer.sendMessage("§a[Admin] Data staged dihapus.");
@@ -1391,7 +1513,7 @@ async function showBulkImportUI(adminPlayer) {
       `§7Gunakan fitur Export untuk backup terlebih dahulu.\n` +
       `${HR}`
     )
-    .button("§7 Batal, Kembali")
+    .button("§f Batal, Kembali")
     .button("§c Saya mengerti risikonya — Lanjut")
     .show(adminPlayer);
 
@@ -1404,7 +1526,7 @@ async function showBulkImportUI(adminPlayer) {
       `§fData §a${items.length} player §fakan ditimpa sekarang.\n\n` +
       `§eApakah kamu benar-benar yakin ingin melanjutkan?`
     )
-    .button1("§7  Tidak, Batalkan")
+    .button1("§f  Tidak, Batalkan")
     .button2("§4  Ya, Terapkan Sekarang")
     .show(adminPlayer);
 
@@ -1459,7 +1581,7 @@ async function showPendingImportList(adminPlayer) {
   const target  = pending[res.selection];
   const confirm = await new MessageFormData().title("§l  Batalkan Pending?  §r")
     .body(`§f Batalkan pending import untuk §c${target.name}§f?`)
-    .button1("§7 Tidak").button2("§c Ya, Batalkan").show(adminPlayer);
+    .button1("§f Tidak").button2("§c Ya, Batalkan").show(adminPlayer);
   if (!confirm.canceled && confirm.selection === 1) {
     dpDel(CFG.K_IMPORT_PEND + target.id);
     adminPlayer.sendMessage(`§a[Admin] Pending import §f${target.name}§a dibatalkan.`);

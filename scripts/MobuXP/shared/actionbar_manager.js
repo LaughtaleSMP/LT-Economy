@@ -35,7 +35,7 @@ system.runInterval(() => {
       player.onScreenDisplay.setActionBar(data.msg);
     } catch { /* player invalid / offline */ }
   }
-}, 4); // ← naik dari 2 ke 4: hemat ~50% call overhead interval ini
+}, 10);
 
 /**
  * Set actionbar untuk satu player.
@@ -71,5 +71,3 @@ export function clearBar(player) {
   const name = typeof player === "string" ? player : player.name;
   _bars.delete(name);
 }
-
-console.log("[ActionBar Manager] Aktif.");

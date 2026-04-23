@@ -3,6 +3,7 @@ import { CFG, PT_POOL, EQ_POOL, EQ_IDX } from "../config.js";
 import { dpGet, dpSet } from "./storage.js";
 import { refundGem } from "./scoreboard.js";
 import { syncPlayerData } from "./player.js";
+import { getByteLength } from "../../dp_manager.js";
 
 export function applyEnchants(stack, rarity, id) {
   if (rarity !== "EPIC" && rarity !== "LEGENDARY") return;
@@ -36,7 +37,7 @@ export const getPend = p => decPend(dpGet(CFG.K_EQ_PEND + p.id, []));
 export function savePend(p, list) {
   let enc = encPend(list), str = JSON.stringify(enc);
   const orig = enc.length;
-  while (enc.length > 0 && str.length > 30000) { enc.pop(); str = JSON.stringify(enc); }
+  while (enc.length > 0 && getByteLength(str) > 30000) { enc.pop(); str = JSON.stringify(enc); }
   if (enc.length < orig) console.warn(`[Gacha] savePend: ${orig - enc.length} item terpotong (${p.name})`);
   dpSet(CFG.K_EQ_PEND + p.id, enc);
 }

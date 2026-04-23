@@ -56,7 +56,6 @@ function restoreTick() {
     const last = world.getDynamicProperty(`${NS}:lastClean`)
     if (typeof last === 'number') {
       tick = Math.min(Math.floor((Date.now() - last) / MS_PER_TICK), cfg.interval)
-      console.warn('[MCleaner] Timer restored — ' + tick + '/' + cfg.interval)
     } else saveTime()
   } catch {}
 }
@@ -91,16 +90,36 @@ function isAdmin(player) {
 }
 
 // -- Core --
-function isMobInCombat(e) {
-  try {
-    return e.dimension.getPlayers({ location: e.location, maxDistance: 10 }).length > 0
-  } catch { return false }
+// [PERF] Pre-cache player positions once per cleanMobs() call.
+// Mengganti isMobInCombat() yang dulu memanggil getPlayers({maxDistance})
+// per entity (= N spatial query) dengan distance check manual O(N×P).
+const SAFE_SQ = 10 * 10; // 10 block radius, squared
+
+function buildPlayerPosCache() {
+  const cache = [];
+  for (const p of world.getPlayers()) {
+    try { cache.push({ x: p.location.x, y: p.location.y, z: p.location.z, dim: p.dimension.id }); }
+    catch {}
+  }
+  return cache;
+}
+
+function isNearPlayer(loc, dimId, playerPos) {
+  for (const pp of playerPos) {
+    if (pp.dim !== dimId) continue;
+    const dx = loc.x - pp.x, dy = loc.y - pp.y, dz = loc.z - pp.z;
+    if (dx * dx + dy * dy + dz * dz < SAFE_SQ) return true;
+  }
+  return false;
 }
 
 function cleanMobs() {
   if (!cfg.enabled) return 0
   const targets = MOB_IDS.filter(id => cfg.mobs[id])
   if (!targets.length) return 0
+
+  // [PERF] Build player position cache ONCE before all loops
+  const playerPos = buildPlayerPosCache();
 
   const killed = {}
   let total = 0
@@ -112,7 +131,9 @@ function cleanMobs() {
         try {
           for (const e of dimension.getEntities({ type: targetId })) {
             try {
-              if (!isValid(e) || e.nameTag?.trim() || isMobInCombat(e)) continue
+              if (!isValid(e) || e.nameTag?.trim()) continue
+              // [PERF] Manual distance check — no per-entity getPlayers() call
+              if (isNearPlayer(e.location, dimId, playerPos)) continue
               e.remove()
               killed[e.typeId] = (killed[e.typeId] ?? 0) + 1
               total++
@@ -123,9 +144,6 @@ function cleanMobs() {
     } catch { /* dimension error */ }
   }
 
-  console.warn('[MCleaner] ' + (total > 0
-    ? 'Dihapus ' + total + ' | ' + Object.entries(killed).map(([id, n]) => id.replace('minecraft:','') + ' x' + n).join(' | ')
-    : 'Clean selesai — tidak ada mob.'))
   return total
 }
 
@@ -258,14 +276,14 @@ world.beforeEvents.itemUse.subscribe(ev => {
     const player = ev.source
     if (!player || ev.itemStack?.typeId !== TRIGGER_ITEM) return
     if (!isAdmin(player)) return
-    console.warn('[MCleaner] itemUse fired — item: ' + ev.itemStack?.typeId + ' | player: ' + player?.name)
+
 
     const now = Date.now()
     const lastOpen = menuCooldown.get(player.name) ?? 0
     if (now - lastOpen < 1000) return
     menuCooldown.set(player.name, now)
 
-    console.warn('[MCleaner] Menu dibuka oleh: ' + player.name)
+
     system.runTimeout(() => openMainMenu(player).catch(e => console.warn('[MCleaner] UI: ' + e)), 1)
   } catch (e) { console.warn('[MCleaner] itemUse error: ' + e) }
 })
@@ -279,12 +297,4 @@ world.afterEvents.playerLeave.subscribe(ev => {
 system.run(() => {
   cfg = loadConfig()
   restoreTick()
-  console.warn(
-    '[MCleaner] Ready' +
-    ' | enabled: ' + cfg.enabled +
-    ' | interval: ' + (cfg.interval === 0 ? 'Off' : cfg.interval + ' tick') +
-    ' | mobs aktif: ' + MOB_IDS.filter(id => cfg.mobs[id]).length +
-    ' | tag admin: ' + ADMIN_TAG +
-    ' | by Laughtale Server'
-  )
-})
+})

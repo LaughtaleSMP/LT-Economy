@@ -6,6 +6,7 @@ export const CFG = {
   MIN_TRANSFER:       10,
   MAX_TRANSFER:       5_000,
   DAILY_LIMIT:        25_000,
+  FREE_TRANSFERS:     5,         // transfer gratis (tanpa pajak) per hari
 
   COOLDOWN_TICKS:     80,
   MAX_PENDING_REQ:    5,
@@ -20,5 +21,5 @@ export const CFG = {
   K_NOTIF_PEND:  "bank:notif_pend:",
   K_GLOBAL_HIST: "bank:global_hist",
 
-  HR: "§8──────────────────",
+  HR: "§8══════════════════════",
 };

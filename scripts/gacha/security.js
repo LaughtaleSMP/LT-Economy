@@ -6,23 +6,40 @@ import {
 import { dpGet, dpSet, dpDel } from "./data.js";
 
 // ── Key persistent ────────────────────────────────────────
-const K_REG_CHESTS    = "gacha:reg_chests";        // whitelist chest (sudah ada di main.js)
-const K_CHEST_LOCK    = "gacha:chest_lock:";       // key per chest → { ownerId, time }
-const K_CHEST_SNAP    = "gacha:chest_snap:";       // snapshot konten terakhir (idle frame)
+const K_REG_CHESTS = "gacha:reg_chests";        // whitelist chest (sudah ada di main.js)
+const K_CHEST_LOCK = "gacha:chest_lock:";       // key per chest → { ownerId, time }
+const K_CHEST_SNAP = "gacha:chest_snap:";       // snapshot konten terakhir (idle frame)
 
 // ── Interval config ───────────────────────────────────────
 // [OPT] GLOBAL_GUARD_INT: 10 → 20 tick (1 detik). Anti-theft masih efektif
 //       karena player tidak bisa mengambil item dari chest dalam < 1 detik.
-const GLOBAL_GUARD_INT   = 20;
+const GLOBAL_GUARD_INT = 20;
 // [OPT] INV_SCAN_INT: 10 → 60 tick (3 detik). Scan inventory jauh lebih jarang.
 //       INV_SCAN_EVERY = round(60/20) = 3, artinya scan setiap 3 guard cycle.
 //       Dengan asumsi normal tidak ada item marked di inventory player,
 //       delay 3 detik untuk mendeteksi theft masih sangat wajar.
-const INV_SCAN_INT       = 60;
-const LOCK_EXPIRE_MS     = 5 * 60 * 1000; // 5 menit dalam ms (pakai Date.now, bukan currentTick)
+const INV_SCAN_INT = 60;
+const LOCK_EXPIRE_MS = 5 * 60 * 1000; // 5 menit dalam ms (pakai Date.now, bukan currentTick)
 
-// ── Helpers ───────────────────────────────────────────────
-function getAllowedChests() { return dpGet(K_REG_CHESTS, []); }
+// ── Helpers ───────────────────────────────────────────────────────
+// [OPT] Cache chest list in security module with 100-tick TTL.
+// Previously getAllowedChests() called dpGet() on every guard cycle (20 ticks)
+// AND on every entity spawn event. With N chests and frequent item drops,
+// this caused excessive JSON parsing overhead.
+let _secChestCache = null;
+let _secChestCacheTick = -999;
+const SEC_CACHE_TTL = 100; // 5 seconds
+
+function getAllowedChests() {
+  const now = system.currentTick;
+  if (_secChestCache !== null && (now - _secChestCacheTick) < SEC_CACHE_TTL) return _secChestCache;
+  _secChestCache = dpGet(K_REG_CHESTS, []);
+  _secChestCacheTick = now;
+  return _secChestCache;
+}
+
+/** Invalidate the security chest cache (called when chests are added/removed). */
+export function invalidateSecChestCache() { _secChestCacheTick = -999; _secChestCache = null; }
 
 /** Dipanggil sekali dari initSecurity, menyimpan referensi mkItem dari main.js */
 let _mkItem = null;
@@ -105,7 +122,7 @@ function restoreChestFromSnapshot(container, chestKey, mkItemFn) {
       const actual = container.getItem(i);
       if (
         !actual ||
-        actual.typeId  !== snap[i].typeId ||
+        actual.typeId !== snap[i].typeId ||
         actual.nameTag !== snap[i].nameTag
       ) {
         container.setItem(i, mkItemFn(snap[i].typeId, snap[i].nameTag.replace(MARK, "")));
@@ -131,7 +148,7 @@ function scanAllPlayerInventories() {
         }
       }
       if (found) p.sendMessage("§c⚠ Item gacha tidak dapat diambil!");
-    } catch {}
+    } catch { }
   }
 }
 
@@ -202,7 +219,7 @@ export function initSecurity(mkItemFn, getDimFn, registerDropGuardFn) {
         const container = block.getComponent("minecraft:inventory")?.container;
         if (!container) continue;
         restoreChestFromSnapshot(container, c.key, mkItemFn);
-      } catch {}
+      } catch { }
     }
 
     // Scan inventory player setiap INV_SCAN_EVERY iterasi (Bug #1 fix)
@@ -221,7 +238,6 @@ export function initSecurity(mkItemFn, getDimFn, registerDropGuardFn) {
   // karena parameter ke-3 tidak ada di signature fungsi ini.
   if (typeof registerDropGuardFn === 'function') {
     registerDropGuardFn();
-    console.warn("[GachaSec] Item drop guard registered.");
   } else {
     console.warn("[GachaSec] WARN: registerDropGuardFn tidak disediakan — item drop guard tidak aktif!");
   }
@@ -304,7 +320,15 @@ export function registerSecureChestHandler(
     const holdingTrigger = player.getComponent("minecraft:equippable")
       ?.getEquipment("Mainhand")?.typeId === CFG.TRIGGER;
 
-    if (!holdingTrigger) return; // event sudah di-cancel di atas, tidak ada yang perlu dilakukan
+    if (!holdingTrigger) {
+      // Notif hanya jika ini chest gacha terdaftar (bukan chest biasa)
+      if (isRegistered) {
+        system.run(() => player.sendMessage(
+          `§6[Gacha] §ePegang §f${CFG.TRIGGER.replace("minecraft:", "").replace(/_/g, " ")} §euntuk membuka chest gacha!`
+        ));
+      }
+      return;
+    }
 
     // ── Bukan kandidat chest gacha ──────────────────────
     if (!isChestCandidateFn(block)) {
@@ -393,16 +417,16 @@ export function registerItemDropGuard() {
       // Cek apakah item muncul di dekat chest terdaftar
       // Optimasi: group chest per dimensi agar tidak iterasi lintas dimensi
       const entDimId = ent.dimension.id;
-      const entLoc   = ent.location;
-      const chests   = getAllowedChests();
+      const entLoc = ent.location;
+      const chests = getAllowedChests();
       for (const c of chests) {
         if (c.dimId !== entDimId) continue;
         const dx = entLoc.x - c.x, dy = entLoc.y - c.y, dz = entLoc.z - c.z;
-        if (dx*dx + dy*dy + dz*dz <= 4) { // radius 2 blok
+        if (dx * dx + dy * dy + dz * dz <= 4) { // radius 2 blok
           ent.remove();
           return;
         }
       }
-    } catch {}
+    } catch { }
   });
 }
