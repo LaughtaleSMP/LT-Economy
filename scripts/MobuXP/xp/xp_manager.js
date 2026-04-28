@@ -2,6 +2,7 @@ import { world, system } from "@minecraft/server";
 import { VANILLA_XP } from "./vanilla_xp.js";
 import { CONFIG as _RAW_CONFIG } from "./xp_config.js";
 import { setBar, clearBar } from "../shared/actionbar_manager.js";
+import { pGet, pSet, getOnlinePlayer } from "../../player_dp.js";
 
 const CONFIG_DEFAULTS = {
   xp_multiplier_percent:        200,
@@ -107,6 +108,13 @@ function getCurrentPeriod() {
 }
 
 function getDailyData(playerId) {
+  // Coba player DP dulu
+  const p = getOnlinePlayer(playerId);
+  if (p) {
+    const data = pGet(p, K_DAILY_COIN, null);
+    if (data) return data;
+  }
+  // Fallback world DP (legacy)
   try {
     const raw = world.getDynamicProperty(K_DAILY_COIN + playerId);
     if (!raw) return { period: -1, total: 0 };
@@ -115,6 +123,10 @@ function getDailyData(playerId) {
 }
 
 function setDailyData(playerId, data) {
+  const p = getOnlinePlayer(playerId);
+  if (p) {
+    try { pSet(p, K_DAILY_COIN, data); return; } catch {}
+  }
   try { world.setDynamicProperty(K_DAILY_COIN + playerId, JSON.stringify(data)); }
   catch (e) { console.warn("[XP Manager] setDailyData gagal:", e); }
 }
@@ -298,8 +310,8 @@ function tierLabelColor(label) {
 
 function playGildedDropEffect(player, dimension, pos) {
   if (!canPlayEffect(player.name)) return;
-  try { dimension.spawnParticle("minecraft:totem_particle", { x: pos.x, y: pos.y + 1, z: pos.z }); }
-  catch { player.runCommand(`particle minecraft:totem_particle ${pos.x} ${pos.y + 1} ${pos.z}`); }
+  try { dimension.spawnParticle("minecraft:Games:coins", { x: pos.x, y: pos.y + 1, z: pos.z }); }
+  catch { player.runCommand(`particle minecraft:Games:coins ${pos.x} ${pos.y + 1} ${pos.z}`); }
   player.runCommand(`playsound ${CONFIG.bonus_sound} @s ~ ~ ~ ${CONFIG.bonus_sound_volume} ${CONFIG.bonus_sound_pitch}`);
 }
 
@@ -443,4 +455,4 @@ world.afterEvents.entityDie.subscribe((event) => {
     }
   });
 });
-
+

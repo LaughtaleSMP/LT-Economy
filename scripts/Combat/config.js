@@ -8,6 +8,11 @@ export const CFG = {
   MIN_REWARD:          10,
   MAX_REWARD:          500,
 
+  ILLEGAL_KILL_PENALTY_PCT: 20,
+  ILLEGAL_KILL_MAX_PENALTY: 1000,
+  ILLEGAL_KILL_KICK_THRESHOLD: 3,
+  ILLEGAL_KILL_WINDOW_MS: 600_000,
+
   STREAK_MULTIPLIER: [
     { min: 0,  mult: 1.0 },
     { min: 3,  mult: 1.5 },

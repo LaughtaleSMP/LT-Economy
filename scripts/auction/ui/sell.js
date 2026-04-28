@@ -11,6 +11,7 @@ import {
 } from "../utils/storage.js";
 import { displayName, enchantSummary, serializeItem, giveItem, freeSlots, takeItemFromSlot, takePartialFromSlot } from "../utils/items.js";
 import { getCoin, setCoin, addCoin, withLock, fmt, timeLeft, playSfx } from "../utils/helpers.js";
+import { UIClose } from "../../ui_close.js";
 
 // ═══════════════════════════════════════════════════════════
 // UI: JUAL ITEM
@@ -19,16 +20,16 @@ export async function uiSell(player) {
   const count = getPlayerActiveCount(player.id);
   if (count >= CFG.MAX_LISTINGS) {
     await new ActionFormData()
-      .title("§l  Jual Item  §r")
+      .title("  Jual Item  §r")
       .body(`${CFG.HR}\n§c Kamu sudah punya §f${count}§c listing aktif (maks ${CFG.MAX_LISTINGS}).\n§8 Batalkan listing lama dulu.\n${CFG.HR}`)
-      .button("§f§l Kembali").show(player);
+      .button("§f Kembali").show(player);
     return;
   }
   if (getActiveListings().length >= CFG.MAX_GLOBAL) {
     await new ActionFormData()
-      .title("§l  Jual Item  §r")
+      .title("  Jual Item  §r")
       .body(`${CFG.HR}\n§c Auction house penuh (${CFG.MAX_GLOBAL} listing).\n§8 Coba lagi nanti.\n${CFG.HR}`)
-      .button("§f§l Kembali").show(player);
+      .button("§f Kembali").show(player);
     return;
   }
 
@@ -44,23 +45,23 @@ export async function uiSell(player) {
 
   if (!slots.length) {
     await new ActionFormData()
-      .title("§l  Jual Item  §r")
+      .title("  Jual Item  §r")
       .body(`${CFG.HR}\n§c Inventory kosong.\n${CFG.HR}`)
-      .button("§f§l Kembali").show(player);
+      .button("§f Kembali").show(player);
     return;
   }
 
   const form1 = new ActionFormData()
-    .title("§l§8 ♦ §eJUAL ITEM§r§l §8♦ §r")
+    .title("§8 ♦ §eJUAL ITEM§r §8♦ §r")
     .body(`${CFG.HR}\n§8 Pilih item dari inventory\n§6 Fee §8── §e${getFee()}% §8dari harga\n${CFG.HR}`);
 
   for (const s of slots) {
     const enc = (() => { try { const e = s.item.getComponent("minecraft:enchantable"); return e?.getEnchantments()?.length > 0; } catch { return false; } })();
     const name = displayName(serializeItem(s.item));
     const qty = s.item.amount > 1 ? ` x${s.item.amount}` : "";
-    form1.button(`§f§l  ${name}${qty}${enc ? " §d✦" : ""}\n§r  §8Slot ${s.slot}`);
+    form1.button(`§f  ${name}${qty}${enc ? " §dEnch" : ""}\n§r  §8Slot ${s.slot}`);
   }
-  form1.button("§6§l  ◀ Kembali");
+  form1.button("§6  Kembali", "textures/items/arrow");
 
   const res1 = await form1.show(player);
   if (res1.canceled || res1.selection === slots.length) return;
@@ -78,7 +79,7 @@ export async function uiSell(player) {
 
   if (totalAmount > 1) {
     const res1b = await new ModalFormData()
-      .title(`§l  Jumlah — ${itemLabel}  §r`)
+      .title(`  Jumlah — ${itemLabel}  §r`)
       .slider(
         `§6 Item §8» §e${itemLabel}\n§6 Stok §8» §f${totalAmount} §8di slot ini\n§8 Geser untuk pilih jumlah yang dijual:`,
         1, totalAmount, { valueStep: 1, defaultValue: totalAmount }
@@ -102,11 +103,11 @@ export async function uiSell(player) {
 
   // Step 3: Pilih mode — Buyout atau Auction
   const modeForm = new ActionFormData()
-    .title("§l§8 ♦ §eMODE§r§l §8♦ §r")
+    .title("§8 ♦ §eMODE§r §8♦ §r")
     .body(`${CFG.HR}\n§8 Pilih mode listing untuk\n§f ${itemLabel}${qtyLabel}\n${CFG.HR}`);
-  modeForm.button(`§e§l  ⛃ Buyout\n§r  §8Harga tetap, beli langsung`);
-  modeForm.button(`§b§l  ⚡ Auction\n§r  §8Lelang naik, bid war`);
-  modeForm.button("§6§l  ◀ Batal");
+  modeForm.button(`§e  Buyout\n§r  §8Harga tetap, beli langsung`, "textures/items/emerald");
+  modeForm.button(`§b  Auction\n§r  §8Lelang naik, bid war`, "textures/items/diamond");
+  modeForm.button("§6  Batal", "textures/items/arrow");
 
   const modeRes = await modeForm.show(player);
   if (modeRes.canceled || modeRes.selection === 2) return;
@@ -117,7 +118,7 @@ export async function uiSell(player) {
   if (!isAuction) {
     // Step 4a: Buyout — Input harga
     const res2 = await new ModalFormData()
-      .title(`§l  Harga — ${itemLabel}  §r`)
+      .title(`  Harga — ${itemLabel}  §r`)
       .textField(
         `§6 Item   §8» §e${itemLabel}${qtyLabel}\n§f Tentukan harga buyout §8(total)\n§8 Min: §e${fmt(CFG.MIN_PRICE)} §8| Maks: §e${fmt(CFG.MAX_BUYOUT)}\n§6 Fee §8» §e${getFee()}% §8dipotong dari saldo`,
         "Contoh: 1000", { defaultValue: "" }
@@ -136,7 +137,7 @@ export async function uiSell(player) {
   } else {
     // Step 4b: Auction — Input starting bid + buyout
     const res2 = await new ModalFormData()
-      .title(`§l  Auction — ${itemLabel}  §r`)
+      .title(`  Auction — ${itemLabel}  §r`)
       .textField(
         `§6 Item §8» §e${itemLabel}${qtyLabel}\n§f Tentukan starting bid\n§8 Min: §e${fmt(CFG.MIN_PRICE)}`,
         "Contoh: 500", { defaultValue: "" }
@@ -197,7 +198,7 @@ export async function uiSell(player) {
   confirmBody += `${CFG.HR}`;
 
   const confirm = await new MessageFormData()
-    .title("§l  Konfirmasi Listing  §r")
+    .title("  Konfirmasi Listing  §r")
     .body(confirmBody)
     .button1("§f Batal").button2("§a Pasang Listing").show(player);
 
@@ -206,6 +207,7 @@ export async function uiSell(player) {
   // Execute
   const finalItem = inv.getItem(chosen.slot);
   if (!finalItem) { player.sendMessage("§c[Auction] Item sudah tidak ada!"); return; }
+  if (finalItem.typeId !== previewData.typeId) { player.sendMessage("§c[Auction] Item berubah! Coba lagi."); return; }
   if (finalItem.amount < sellQty) { player.sendMessage("§c[Auction] Jumlah item berubah! Coba lagi."); return; }
   if (getCoin(player) < fee) { player.sendMessage("§c[Auction] Saldo kurang untuk fee!"); return; }
 
@@ -300,31 +302,34 @@ export async function uiMyListings(player) {
     const myListings = getActiveListings().filter(l => l.sellerId === player.id);
     if (!myListings.length) {
       await new ActionFormData()
-        .title("§l  Listing Saya  §r")
+        .title("  Listing Saya  §r")
         .body(`${CFG.HR}\n§8 Kamu tidak punya listing aktif.\n${CFG.HR}`)
-        .button("§f§l Kembali").show(player);
+        .button("§f Kembali").show(player);
       return;
     }
 
     const form = new ActionFormData()
-      .title(`§l§8 ♦ §eLISTING SAYA§r§l §8♦ §r`)
+      .title(`§8 ♦ §eLISTING SAYA§r §8♦ §r`)
       .body(`${CFG.HR}\n§8 Kelola listing aktifmu:\n${CFG.HR}`);
 
     for (const l of myListings) {
       const name = displayName(l.itemData);
       const isAuc = l.mode === "auction";
+      const hasBid = isAuc && l.bidderId && l.currentBid > 0;
       const badge = isAuc
-        ? (l.bidCount > 0 ? ` §b⚡${l.bidCount}` : " §b⚡")
-        : (l.offerId ? ` §c[!]` : "");
+        ? (hasBid ? " §a●" : " §8○")
+        : (l.offerId ? " §c[!]" : "");
       const priceLabel = isAuc
-        ? (l.bidCount > 0 ? `§b${fmt(l.currentBid)}⛃` : `§e${fmt(l.startBid)}⛃ §8start`)
+        ? (hasBid ? `§b${fmt(l.currentBid)}⛃ §8by §f${l.bidderName}` : `§e${fmt(l.startBid)}⛃ §8start`)
         : `§e${fmt(l.price)}⛃`;
-      form.button(`§f§l  ${name}${badge}\n§r  ${priceLabel} §8| §f${timeLeft(l.expiresAt)}`);
+      const icon = isAuc ? (hasBid ? "textures/items/diamond" : "textures/items/gold_ingot") : "textures/items/emerald";
+      form.button(`§f  ${name}${badge}\n§r  ${priceLabel} §8| §f${timeLeft(l.expiresAt)}`, icon);
     }
-    form.button("§6§l  ◀ Kembali");
+    form.button("§6  Kembali", "textures/items/arrow");
 
     const res = await form.show(player);
-    if (res.canceled || res.selection === myListings.length) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === myListings.length) return;
 
     await uiMyListingDetail(player, myListings[res.selection].id);
   }
@@ -357,15 +362,15 @@ async function uiMyListingDetail(player, listingId) {
   body += `${CFG.HR}`;
 
   const btns = [];
-  const form = new ActionFormData().title("§l§8 ♦ §eDETAIL§r§l §8♦ §r").body(body);
+  const form = new ActionFormData().title("§8 ♦ §eDETAIL§r §8♦ §r").body(body);
 
   if (hasOffer) {
-    form.button(`§a§l  Terima Tawaran\n§r  §e${fmt(l.offerAmount)}⛃ §8dari §f${l.offerName}`); btns.push("accept");
-    form.button("§c§l  Tolak Tawaran"); btns.push("decline");
+    form.button(`§a  Terima Tawaran\n§r  §e${fmt(l.offerAmount)}⛃ §8dari §f${l.offerName}`, "textures/items/emerald"); btns.push("accept");
+    form.button("§c  Tolak Tawaran", "textures/items/redstone_dust"); btns.push("decline");
   }
   // Auction listings settle automatically — no accept/decline
-  form.button("§c§l  Batalkan Listing\n§r  §8Item kembali, fee tidak refund"); btns.push("cancel");
-  form.button("§6§l  ◀ Kembali"); btns.push("back");
+  form.button("§c  Batalkan Listing\n§r  §8Item kembali, fee tidak refund", "textures/items/redstone_dust"); btns.push("cancel");
+  form.button("§6  Kembali", "textures/items/arrow"); btns.push("back");
 
   const res = await form.show(player);
   if (res.canceled || btns[res.selection] === "back") return;
@@ -381,7 +386,7 @@ async function uiMyListingDetail(player, listingId) {
 
 async function acceptOffer(seller, listingId) {
   const confirm = await new MessageFormData()
-    .title("§l  Terima Tawaran?  §r")
+    .title("  Terima Tawaran?  §r")
     .body(`${CFG.HR}\n§f Terima tawaran ini?\n§8 Koin langsung masuk saldo.\n${CFG.HR}`)
     .button1("§f Batal").button2("§a Terima").show(seller);
   if (confirm.canceled || confirm.selection !== 1) return;
@@ -415,7 +420,7 @@ async function acceptOffer(seller, listingId) {
   if (result.amount >= CFG.BROADCAST_MIN_PRICE) {
     const enchBadge = result.hasEnch ? " §d✦" : "";
     world.sendMessage(
-      `\n§6§l[Auction]§r §e${result.buyerName} §fmembeli §e${result.itemName}${enchBadge} §fdari §e${result.sellerName} §fseharga §e${fmt(result.amount)} Koin§f!\n`
+      `\n§6[Auction]§r §e${result.buyerName} §fmembeli §e${result.itemName}${enchBadge} §fdari §e${result.sellerName} §fseharga §e${fmt(result.amount)} Koin§f!\n`
     );
   }
 }
@@ -444,7 +449,7 @@ async function declineOffer(seller, listingId) {
 
 async function cancelListing(seller, listingId) {
   const confirm = await new MessageFormData()
-    .title("§l  Batalkan Listing?  §r")
+    .title("  Batalkan Listing?  §r")
     .body(`${CFG.HR}\n§c Item akan dikembalikan ke inventory.\n§c Fee listing TIDAK dikembalikan!\n${CFG.HR}`)
     .button1("§f Tidak").button2("§c Batalkan").show(seller);
   if (confirm.canceled || confirm.selection !== 1) return;

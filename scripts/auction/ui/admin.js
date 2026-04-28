@@ -8,9 +8,10 @@ import {
   getHistory, getSettings, saveSettings,
   pushNotif, addPendingItem, addPendingCoin,
 } from "../utils/storage.js";
-import { displayName, giveItem } from "../utils/items.js";
+import { displayName, giveItem, itemIcon } from "../utils/items.js";
 import { addCoin, fmt, timeLeft, timeAgo, playSfx } from "../utils/helpers.js";
 import { getDPStats, formatBytes, cleanupInactive } from "../../dp_manager.js";
+import { UIClose } from "../../ui_close.js";
 
 export async function uiAdmin(player) {
   if (!player.hasTag(CFG.ADMIN_TAG)) { player.sendMessage("§c[Auction] Akses ditolak."); return; }
@@ -20,7 +21,7 @@ export async function uiAdmin(player) {
     const active = getActiveListings();
 
     let ab = `${CFG.HR}\n`;
-    ab += `§c§l  A D M I N\n`;
+    ab += `§c  A D M I N\n`;
     ab += `${CFG.HR}\n\n`;
     ab += `  §eAdmin   §8── §a${player.name}\n`;
     ab += `  §eFee     §8── §f${settings.feePct}%\n`;
@@ -28,17 +29,18 @@ export async function uiAdmin(player) {
     ab += `\n${CFG.HR}`;
 
     const form = new ActionFormData()
-      .title("§l§8 ♦ §cADMIN§r§l §8♦ §r")
+      .title("§8 ♦ §cADMIN§r §8♦ §r")
       .body(ab)
-      .button("§c§l  Hapus Listing\n§r  §8Force cancel listing")
-      .button("§e§l  Ubah Fee\n§r  §8Persentase fee listing")
-      .button("§b§l  Log History\n§r  §8Riwayat transaksi global")
-      .button("§a§l  DP Stats\n§r  §8Monitor dynamic property")
-      .button("§6§l  ◀ Kembali");
+      .button("§c  Hapus Listing\n§r  §8Force cancel listing", "textures/items/redstone_dust")
+      .button("§e  Ubah Fee\n§r  §8Persentase fee listing", "textures/items/gold_ingot")
+      .button("§b  Log History\n§r  §8Riwayat transaksi global", "textures/items/book_writable")
+      .button("§a  DP Stats\n§r  §8Monitor dynamic property", "textures/items/compass_item")
+      .button("§6  Kembali", "textures/items/arrow");
 
     playSfx(player, SFX.ADMIN);
     const res = await form.show(player);
-    if (res.canceled || res.selection === 4) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === 4) return;
 
     if (res.selection === 0) await adminRemoveListing(player);
     if (res.selection === 1) await adminSetFee(player);
@@ -50,14 +52,14 @@ export async function uiAdmin(player) {
 async function adminRemoveListing(admin) {
   const active = getActiveListings();
   if (!active.length) {
-    await new ActionFormData().title("§l  Hapus Listing  §r")
+    await new ActionFormData().title("  Hapus Listing  §r")
       .body(`${CFG.HR}\n§7 Tidak ada listing aktif.\n${CFG.HR}`)
-      .button("§f§l Kembali").show(admin);
+      .button("§f Kembali", "textures/items/arrow").show(admin);
     return;
   }
 
   const form = new ActionFormData()
-    .title("§l§8 ♦ §cHAPUS LISTING§r§l §8♦ §r")
+    .title("§8 ♦ §cHAPUS LISTING§r §8♦ §r")
     .body(`${CFG.HR}\n§c Pilih listing untuk dihapus:\n${CFG.HR}`);
 
   for (const l of active) {
@@ -66,9 +68,9 @@ async function adminRemoveListing(admin) {
       ? (l.bidCount > 0 ? `§b${fmt(l.currentBid)}⛃` : `§e${fmt(l.startBid)}⛃ §8start`)
       : `§e${fmt(l.price)}⛃`;
     const modeTag = isAuc ? " §b⚡" : "";
-    form.button(`§f§l  ${displayName(l.itemData)}${modeTag}\n§r  §b${l.sellerName} §8| ${pLabel} §8| §f${timeLeft(l.expiresAt)}`);
+    form.button(`§f  ${displayName(l.itemData)}${modeTag}\n§r  §b${l.sellerName} §8| ${pLabel} §8| §f${timeLeft(l.expiresAt)}`, itemIcon(l.itemData.typeId));
   }
-  form.button("§6§l  ◀ Kembali");
+  form.button("§6  Kembali", "textures/items/arrow");
 
   const res = await form.show(admin);
   if (res.canceled || res.selection === active.length) return;
@@ -114,7 +116,7 @@ async function adminRemoveListing(admin) {
 async function adminSetFee(admin) {
   const settings = getSettings();
   const res = await new ModalFormData()
-    .title("§l  Ubah Fee  §r")
+    .title("  Ubah Fee  §r")
     .slider(
       `§6 Fee Listing §8(saat ini: §f${settings.feePct}%§8)`,
       0, 30, { valueStep: 1, defaultValue: settings.feePct }
@@ -158,9 +160,9 @@ async function adminViewHistory(admin) {
   body += `\n${CFG.HR}`;
 
   await new ActionFormData()
-    .title("§l  History Auction  §r")
+    .title("  History Auction  §r")
     .body(body)
-    .button("§f§l Kembali")
+    .button("§f Kembali", "textures/items/arrow")
     .show(admin);
 }
 
@@ -186,15 +188,16 @@ async function adminDPStats(admin) {
       `${CFG.HR}`;
 
     const form = new ActionFormData()
-      .title("§l§8 ♦ §cDP MONITOR§r§l §8♦ §r")
+      .title("§8 ♦ §cDP MONITOR§r §8♦ §r")
       .body(body)
-      .button("§e§l  Cleanup 30 Hari\n§r  §8Hapus data player inaktif")
-      .button("§c§l  Cleanup 7 Hari\n§r  §8Hapus lebih agresif")
-      .button("§6§l  ◀ Kembali");
+      .button("§e  Cleanup 30 Hari\n§r  §8Hapus data player inaktif", "textures/items/iron_shovel")
+      .button("§c  Cleanup 7 Hari\n§r  §8Hapus lebih agresif", "textures/items/diamond_shovel")
+      .button("§6  Kembali", "textures/items/arrow");
 
     playSfx(admin, SFX.ADMIN);
     const res = await form.show(admin);
-    if (res.canceled || res.selection === 2) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === 2) return;
 
     let result;
     if (res.selection === 0) result = cleanupInactive(30, true);

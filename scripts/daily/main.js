@@ -14,9 +14,9 @@ function fmt(n) { return n.toLocaleString("id-ID"); }
 
 // Tier label colors for chat messages
 const TIER_CHAT = {
-  daily: { tag: "§b§l[Quest]§r", name: "Harian" },
-  weekly: { tag: "§3§l[Quest Minggu]§r", name: "Mingguan" },
-  monthly: { tag: "§5§l[Quest Bulan]§r", name: "Bulanan" },
+  daily: { tag: "§b[Quest]§r", name: "Harian" },
+  weekly: { tag: "§3[Quest Minggu]§r", name: "Mingguan" },
+  monthly: { tag: "§5[Quest Bulan]§r", name: "Bulanan" },
 };
 
 // Command /lt:daily
@@ -28,7 +28,7 @@ system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
     cheatsRequired: false,
   }, ({ sourceEntity: player }) => {
     if (!player || player.typeId !== "minecraft:player") return { status: CustomCommandStatus.Failure, message: "Hanya player." };
-    system.run(() => openDailyMenu(player).catch(e => console.warn("[Daily] UI:", e)));
+    system.run(() => openDailyMenu(player).catch(e => { if (!e?.isUIClose) console.warn("[Daily] UI:", e); }));
     return { status: CustomCommandStatus.Success, message: "" };
   });
 });
@@ -38,19 +38,19 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
   if (!initialSpawn) return;
   system.runTimeout(() => {
     try {
-      const result = processLogin(player.id);
+      const result = processLogin(player);
       if (!result) return;
       addCoin(player, result.coin);
       setStat(player.id, "loginDays", result.totalDays);
 
       const isDay7 = result.streak === 7;
       const streakLine = isDay7
-        ? `§6§lHARI KE-7! §r§e★ Bonus Besar!`
+        ? `§6HARI KE-7! §r§e★ Bonus Besar!`
         : `§fHari ke-§e${result.streak}`;
 
       player.sendMessage(
         `\n§8═══════════════════` +
-        `\n§6§l  ✦ DAILY LOGIN ✦` +
+        `\n§6  ✦ DAILY LOGIN ✦` +
         `\n§r§8═══════════════════` +
         `\n§r  §aSelamat datang, §f${player.name}§a!` +
         `\n` +
@@ -64,15 +64,15 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
 
       const newAch = updateStat(player.id, "loginDays", 0);
       for (const ach of newAch)
-        player.sendMessage(`\n§d§l[Achievement]§r §f${ach.label} §eterbuka!\n§8  Klaim di §f/lt:daily\n`);
+        player.sendMessage(`\n§d[Achievement]§r §f${ach.label} §eterbuka!\n§f  Klaim di §e/lt:daily\n`);
       updateStat(player.id, "earned", result.coin);
 
       // Drain pending achievement notifications from previous offline session
       const pending = drainAchNotifs(player.id);
       if (pending.length > 0) {
-        player.sendMessage(`\n§d§l[Achievement]§r §eSaat kamu offline, ada achievement baru:`);
+        player.sendMessage(`\n§d[Achievement]§r §eSaat kamu offline, ada achievement baru:`);
         for (const label of pending)
-          player.sendMessage(`  §d★ §f${label} §eterbuka! §8Klaim di §f/lt:daily`);
+          player.sendMessage(`  §d★ §f${label} §eterbuka! §fKlaim di §e/lt:daily`);
         player.sendMessage("");
       }
     } catch (e) { console.warn("[Daily] login:", e); }
@@ -111,14 +111,14 @@ function notifyQuestDone(player, results) {
   if (!player) return;
   for (const { tier, label } of results) {
     const chat = TIER_CHAT[tier];
-    player.sendMessage(`\n${chat.tag} §f${label} §aselesai!\n§8  Klaim di §f/lt:daily\n`);
+    player.sendMessage(`\n${chat.tag} §f${label} §aselesai!\n§f  Klaim di §e/lt:daily\n`);
   }
 }
 
 // Process accumulated events for one player
 function handleAchNotif(pid, player, achList) {
   for (const ach of achList) {
-    if (player) player.sendMessage(`\n§d§l[Achievement]§r §f${ach.label} §eterbuka!\n§8  Klaim di §f/lt:daily\n`);
+    if (player) player.sendMessage(`\n§d[Achievement]§r §f${ach.label} §eterbuka!\n§f  Klaim di §e/lt:daily\n`);
     else queueAchNotif(pid, ach.label);
   }
 }

@@ -1,16 +1,23 @@
-// daily/achievement.js — Persistent stat tracking & achievement system
+// daily/achievement.js — Persistent stat tracking & achievement system (Hybrid Player DP)
 import { world } from "@minecraft/server";
 import { DAILY_CFG as CFG } from "./config.js";
+import { pGet, pSet } from "../player_dp.js";
 
 const statsCache = new Map();
 const dirtyStats = new Set();
 const DEFAULT_STATS = { kills: 0, mined: 0, placed: 0, earned: 0, loginDays: 0, questsDone: 0, claimed: [], pendingAch: [] };
 
 function readStatsDP(pid) {
+  const p = world.getPlayers().find(pl => pl.id === pid);
+  if (p) return pGet(p, CFG.K_STATS, null);
   try { const r = world.getDynamicProperty(CFG.K_STATS + pid); return r ? JSON.parse(r) : null; }
   catch { return null; }
 }
 function writeStatsDP(pid, data) {
+  const p = world.getPlayers().find(pl => pl.id === pid);
+  if (p) {
+    try { pSet(p, CFG.K_STATS, data); return; } catch {}
+  }
   try { world.setDynamicProperty(CFG.K_STATS + pid, JSON.stringify(data)); }
   catch (e) { console.warn("[Daily] writeStats:", e); }
 }

@@ -54,20 +54,26 @@ export const SFX = {
 // Diurutkan berdasarkan prioritas match (pertama yang cocok menang).
 // ═══════════════════════════════════════════════════════════
 export const CATEGORIES = [
-  { id: "weapon",  label: "Senjata",        color: "§c", icon: "⚔",
+  { id: "weapon",  label: "Senjata",        color: "§c",
+    tex: "textures/items/diamond_sword",
     re: /sword|_bow$|bow$|crossbow|trident|mace/ },
-  { id: "armor",   label: "Armor",          color: "§9", icon: "◆",
+  { id: "armor",   label: "Armor",          color: "§9",
+    tex: "textures/items/diamond_chestplate",
     re: /helmet|chestplate|leggings|boots|turtle_shell|elytra|shield/ },
-  { id: "tool",    label: "Tools",          color: "§a", icon: "◆",
+  { id: "tool",    label: "Tools",          color: "§a",
+    tex: "textures/items/diamond_pickaxe",
     re: /pickaxe|_axe|shovel|hoe|shears|fishing_rod|flint_and_steel|brush|spyglass|compass|clock|lead|name_tag/ },
-  { id: "block",   label: "Blok & Material", color: "§6", icon: "■",
+  { id: "block",   label: "Blok & Material", color: "§6",
+    tex: "textures/blocks/gold_block",
     re: /stone|cobble|dirt|sand|gravel|log|wood|plank|wool|concrete|glass|brick|ore|deepslate|ingot|nugget|raw_iron|raw_gold|raw_copper|diamond$|emerald$|amethyst|copper$|quartz|obsidian|netherrack|basalt|clay|dripstone|calcite|tuff/ },
-  { id: "food",    label: "Makanan",        color: "§e", icon: "✦",
+  { id: "food",    label: "Makanan",        color: "§e",
+    tex: "textures/items/apple_golden",
     re: /apple|bread|beef|pork|chicken|mutton|rabbit|cod|salmon|potato|carrot|melon_slice|cookie|cake|pumpkin_pie|stew|golden_apple|enchanted_golden_apple|sweet_berries|glow_berries|dried_kelp|cooked_|beetroot|honey_bottle/ },
-  { id: "potion",  label: "Potion & Efek",  color: "§d", icon: "◆",
+  { id: "potion",  label: "Potion & Efek",  color: "§d",
+    tex: "textures/items/potion_bottle_drinkable",
     re: /potion|splash_potion|lingering_potion|tipped_arrow|totem|ender_pearl|blaze_powder|ghast_tear|magma_cream|phantom_membrane|brewing_stand|ender_eye/ },
 ];
 
 /** ID kategori fallback untuk item yang tidak cocok regex manapun */
-export const CAT_OTHER    = { id: "other",     label: "Lainnya",   color: "§f", icon: "■" };
-export const CAT_ENCHANTED = { id: "enchanted", label: "Enchanted", color: "§5", icon: "✦" };
+export const CAT_OTHER    = { id: "other",     label: "Lainnya",   color: "§f", tex: "textures/items/ender_eye" };
+export const CAT_ENCHANTED = { id: "enchanted", label: "Enchanted", color: "§5", tex: "textures/items/book_enchanted" };

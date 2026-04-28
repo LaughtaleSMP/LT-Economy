@@ -45,6 +45,8 @@ import {
   fxRollingSpiral, fxRevealBurst, fxLegendaryStorm, fxSlotPop, fxPaySparkle,
 } from "./data.js";
 
+import { UIClose } from "../ui_close.js";
+
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════
@@ -330,14 +332,14 @@ function drawIdleFrame(container, key, type, frame) {
   for (const s of IDLE_INNER) setSlotIfChanged(container, key, s, innerOn ? hiIn : bg, " ");
 
   const ptL = [
-    "§r§5§l✦ GACHA PARTIKEL",
-    "§r§d§l◈ Bayar dengan Gem",
-    "§r§b§l✦ Klik untuk mulai!",
+    "§r§5✦ GACHA PARTIKEL",
+    "§r§d◈ Bayar dengan Gem",
+    "§r§b✦ Klik untuk mulai!",
   ];
   const eqL = [
-    "§r§6§l★ GACHA PERALATAN",
-    "§r§e§l◈ Bayar dengan Koin",
-    "§r§f§l★ Klik untuk mulai!",
+    "§r§6★ GACHA PERALATAN",
+    "§r§e◈ Bayar dengan Koin",
+    "§r§f★ Klik untuk mulai!",
   ];
   const lbl = (isPt ? ptL : eqL)[Math.floor(frame / 25) % 3];
   setSlotIfChanged(container, key, IDLE_CENTER, icon, lbl);
@@ -396,11 +398,11 @@ function reveal1x(container, item, key, player, type, chestLoc) {
   const { color, glass, label } = R[item.rarity];
   const itemId = type === "PARTICLE" ? item.visual : item.id;
   fillGlass(container, key, glass);
-  setSlot(container, key, SLOT.T, glass, `${color}§l✦ [ ${label.toUpperCase()} ]`);
+  setSlot(container, key, SLOT.T, glass, `${color}✦ [ ${label.toUpperCase()} ]`);
   setSlot(container, key, SLOT.C, itemId,
-    item.isDup ? `${color}§l${item.name} §7[Dup]` : `${color}§l${item.name}`
+    item.isDup ? `${color}${item.name} §7[Dup]` : `${color}${item.name}`
   );
-  setSlot(container, key, SLOT.B, glass, `${color}§l✦ [ ${label.toUpperCase()} ]`);
+  setSlot(container, key, SLOT.B, glass, `${color}✦ [ ${label.toUpperCase()} ]`);
   sfx(player, item.isDup ? SFX.DUP : SFX.REVEAL[item.rarity]);
   sfxArea(player.location, player.dimension, item.isDup ? SFX.DUP : SFX.REVEAL[item.rarity], player.id);
 
@@ -428,11 +430,11 @@ async function reveal10x(container, results, key, player, type, chestLoc) {
   const best = results[results.length - 1];
   const { glass: bg, color: bc, label: bl } = R[best.rarity];
   fillGlass(container, key, bg);
-  setSlot(container, key, SLOT.T, bg, `${bc}§l ★ TERBAIK: ${bl.toUpperCase()}`);
+  setSlot(container, key, SLOT.T, bg, `${bc} ★ TERBAIK: ${bl.toUpperCase()}`);
   setSlot(container, key, SLOT.C, type === "PARTICLE" ? best.visual : best.id,
-    `${bc}§l${best.name}${best.isDup ? " (D)" : ""}`
+    `${bc}${best.name}${best.isDup ? " (D)" : ""}`
   );
-  setSlot(container, key, SLOT.B, bg, `${bc}§l ★ TERBAIK: ${bl.toUpperCase()}`);
+  setSlot(container, key, SLOT.B, bg, `${bc} ★ TERBAIK: ${bl.toUpperCase()}`);
   sfx(player, best.isDup ? SFX.DUP : SFX.REVEAL[best.rarity], SFX.REVEAL[best.rarity].pitch * .75);
   sfxArea(player.location, player.dimension, best.isDup ? SFX.DUP : SFX.REVEAL[best.rarity], player.id);
 
@@ -487,9 +489,9 @@ function broadcastRare(pName, items, type) {
     if (item.isDup || R_KEYS.indexOf(item.rarity) < 3) continue;
     const col = R[item.rarity].color;
     if (item.rarity === "LEGENDARY")
-      world.sendMessage(`§6§l[★★ LEGENDARY ★★]\n§r${pfx} §e${pName} §fmendapat ${col}§l${item.name}§r§f!`);
+      world.sendMessage(`§6[★★ LEGENDARY ★★]\n§r${pfx} §e${pName} §fmendapat ${col}${item.name}§r§f!`);
     else
-      world.sendMessage(`${pfx} ${col}${pName} §fmendapat ${col}§l${item.name}§r§f! §8[${R[item.rarity].label}]`);
+      world.sendMessage(`${pfx} ${col}${pName} §fmendapat ${col}${item.name}§r§f! §8[${R[item.rarity].label}]`);
   }
 }
 
@@ -518,14 +520,14 @@ async function showParticleSession(player) {
 
     const btns = ["pull1","pull10","info","disc","global",...(isAdmin ? ["admin"] : []),"close"];
     const form = new ActionFormData()
-      .title("§l§5  ✦ GACHA PARTIKEL ✦  §r").body(body)
-      .button(`§l Pull 1x\n§r§b${cost1} Gem${hasDisc ? ` §a(-${disc.pct}%)` : ""}`)
-      .button(`§l Pull 10x\n§r§b${cost10} Gem${hasDisc ? ` §a(-${disc.pct}%)` : ""}`)
-      .button("§l Info Reward")
-      .button("§l Kode Diskon")
-      .button("§l History Global");
-    if (isAdmin) form.button("§l [ADMIN]");
-    form.button("§l Tutup");
+      .title("§5  ✦ GACHA PARTIKEL ✦  §r").body(body)
+      .button(` Pull 1x\n§r§b${cost1} Gem${hasDisc ? ` §a(-${disc.pct}%)` : ""}`)
+      .button(` Pull 10x\n§r§b${cost10} Gem${hasDisc ? ` §a(-${disc.pct}%)` : ""}`)
+      .button(" Info Reward")
+      .button(" Kode Diskon")
+      .button(" History Global");
+    if (isAdmin) form.button(" [ADMIN]");
+    form.button(" Tutup");
 
     sfx(player, SFX.OPEN);
     const res = await form.show(player);
@@ -575,20 +577,20 @@ async function showEquipmentSession(player) {
     }
 
     const btns = [];
-    const form = new ActionFormData().title("§l§6  ★ GACHA PERALATAN ★  §r").body(body);
+    const form = new ActionFormData().title("§6  ★ GACHA PERALATAN ★  §r").body(body);
     if (free >= 1) {
-      form.button(`§l Pull 1x\n§r§e${cost1} Koin${hasDisc ? ` §a(-${disc.pct}%)` : ""}`);  btns.push("pull1");
-      form.button(`§l Pull 10x\n§r§e${cost10} Koin${hasDisc ? ` §a(-${disc.pct}%)` : ""}`); btns.push("pull10");
+      form.button(` Pull 1x\n§r§e${cost1} Koin${hasDisc ? ` §a(-${disc.pct}%)` : ""}`);  btns.push("pull1");
+      form.button(` Pull 10x\n§r§e${cost10} Koin${hasDisc ? ` §a(-${disc.pct}%)` : ""}`); btns.push("pull10");
     } else {
-      form.button("§l Pull 1x §8(inv penuh)\n§r§8Kosongkan inventory"); btns.push("noop");
-      form.button("§l Pull 10x §8(inv penuh)\n§r§8Kosongkan inventory"); btns.push("noop");
+      form.button(" Pull 1x §8(inv penuh)\n§r§8Kosongkan inventory"); btns.push("noop");
+      form.button(" Pull 10x §8(inv penuh)\n§r§8Kosongkan inventory"); btns.push("noop");
     }
-    form.button(`§l Klaim Pending (${pend.length})`);  btns.push("claim");
-    form.button("§l Info Reward");                        btns.push("info");
-    form.button("§l Kode Diskon");                        btns.push("disc");
-    form.button("§l History Global");                     btns.push("global");
-    if (isAdmin) { form.button("§l [ADMIN]"); btns.push("admin"); }
-    form.button("§l Tutup"); btns.push("close");
+    form.button(` Klaim Pending (${pend.length})`);  btns.push("claim");
+    form.button(" Info Reward");                        btns.push("info");
+    form.button(" Kode Diskon");                        btns.push("disc");
+    form.button(" History Global");                     btns.push("global");
+    if (isAdmin) { form.button(" [ADMIN]"); btns.push("admin"); }
+    form.button(" Tutup"); btns.push("close");
 
     sfx(player, SFX.OPEN);
     const res = await form.show(player);
@@ -635,21 +637,21 @@ async function showHubMenu(player) {
       `§b✦ Gem: §f${getGem(player)}  §e Koin: §f${getCoin(player)}\n` +
       `§5Partikel: §f${PT_POOL.filter(p => player.hasTag(p.tag)).length}§7/§f${PT_POOL.length}  §7Pull PT:§f${ptSt.total}x  EQ:§f${eqSt.total}x\n`;
     if (pend.length) body += `§c⚠ ${pend.length} item pending — buka menu EQ untuk klaim!\n`;
-    body += `${HR}\n§7Pegang §fAmethyst Shard §7dan klik kanan di udara.\n${HR}`;
+    body += `${HR}\n§7Klik §fchest gacha §7langsung untuk mulai.\n${HR}`;
 
     const btns = [];
-    const form = new ActionFormData().title("§l§d  ✦ GACHA HUB ✦  §r").body(body);
-    form.button(`§l Gacha Partikel\n§r§b${CFG.PT_COST_1} Gem / 1x`); btns.push("pt");
-    form.button(`§l Gacha Peralatan\n§r§e${CFG.EQ_COST_1} Koin / 1x`); btns.push("eq");
-    form.button("§l Leaderboard");   btns.push("lb");
-    form.button("§l Statistik Saya"); btns.push("stats");
-    form.button("§l History Global");     btns.push("global");
-    if (isAdmin) { form.button("§l [ADMIN]"); btns.push("admin"); }
-    form.button("§l Tutup"); btns.push("close");
+    const form = new ActionFormData().title("§d  ✦ GACHA HUB ✦  §r").body(body);
+    form.button(` Gacha Partikel\n§r§b${CFG.PT_COST_1} Gem / 1x`); btns.push("pt");
+    form.button(` Gacha Peralatan\n§r§e${CFG.EQ_COST_1} Koin / 1x`); btns.push("eq");
+    form.button(" Leaderboard");   btns.push("lb");
+    form.button(" Statistik Saya"); btns.push("stats");
+    form.button(" History Global");     btns.push("global");
+    if (isAdmin) { form.button(" [ADMIN]"); btns.push("admin"); }
+    form.button(" Tutup"); btns.push("close");
 
     sfx(player, SFX.OPEN);
     const res = await form.show(player);
-    if (res.canceled) return;
+    if (res.canceled) throw new UIClose();
     const action = btns[res.selection];
 
     if (action === "close")  return;
@@ -755,12 +757,12 @@ async function executeGachaIntent(player, intent, block) {
   sfxArea(chestBlock.location, chestBlock.dimension, SFX.READY, player.id);
 
   await new ActionFormData()
-    .title("§l§a  ★ Siap!  §r")
+    .title("§a  ★ Siap!  §r")
     .body(
       `${HR}\n§a Pembayaran berhasil!\n§f ${cost} ${unit} dipotong.\n` +
       `${HR}\n§e Buka chest ini untuk hasil!\n${HR}`
     )
-    .button("§l Buka Chest Sekarang!")
+    .button(" Buka Chest Sekarang!")
     .show(player);
 
   try {
@@ -805,6 +807,7 @@ async function executeGachaIntent(player, intent, block) {
   } finally {
     dpDel(sessRefKey);
     clearLock(key);
+    stopIdleForChest(key); // [FIX] pastikan interval lama selalu di-clear sebelum restart idle
     try { const c = fresh(); if (c) clrBox(c); } catch {}
     lastPull.set(player.id, system.currentTick);
     const regEntry = getAllowedChestsCached().find(c => c.key === key);
@@ -885,14 +888,15 @@ async function showLeaderboard(player) {
     body += HR;
 
     const form = new ActionFormData()
-      .title(`§l§e  ★ LEADERBOARD: ${tab.label}  §r`)
+      .title(`§e  ★ LEADERBOARD: ${tab.label}  §r`)
       .body(body);
     TABS.forEach((t, i) => form.button(i === tabIdx ? `§a> ${t.label}` : `§f${t.label}`));
-    form.button("§l Kembali");
+    form.button(" Kembali");
 
     sfx(player, SFX.OPEN);
     const res = await form.show(player);
-    if (res.canceled || res.selection === TABS.length) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === TABS.length) return;
     tabIdx = res.selection;
   }
 }
@@ -907,12 +911,12 @@ async function showMyStats(player) {
   const hist   = dpGet(CFG.K_HIST + player.id, []);
 
   let body = `${HR}\n§b✦ Gem: §f${getGem(player)}  §e★ Koin: §f${getCoin(player)}\n${HR}\n`;
-  body += `§5§l[ PARTIKEL ]\n`;
+  body += `§5[ PARTIKEL ]\n`;
   body += `§7Koleksi  : §f${ptCol}§7/§f${PT_POOL.length} (${(ptCol/PT_POOL.length*100).toFixed(0)}%)\n`;
   body += `§7Total Pull: §f${ptSt.total}x\n`;
   body += `§7Pity      : ${bar(ptSr, CFG.PT_PITY_RARE)} §f${ptSr}/${CFG.PT_PITY_RARE}\n`;
   body += `§7Rarity    : ` + R_KEYS.map(k => `${R[k].color}${k[0]}:${ptSt.by[k]??0}`).join("§8, ") + "\n";
-  body += `${HR}\n§6§l[ PERALATAN ]\n`;
+  body += `${HR}\n§6[ PERALATAN ]\n`;
   body += `§7Total Pull : §f${eqSt.total}x\n`;
   body += `§7Pity Rare+ : ${bar(eqPity.sr, CFG.EQ_PITY_RARE)} §f${eqPity.sr}/${CFG.EQ_PITY_RARE}\n`;
   body += `§7Pity Leg   : ${bar(eqPity.l, CFG.EQ_PITY_LEG)} §f${eqPity.l}/${CFG.EQ_PITY_LEG}\n`;
@@ -927,8 +931,8 @@ async function showMyStats(player) {
   }
 
   await new ActionFormData()
-    .title(`§l§b  ★ STATISTIK — ${player.name}  §r`)
-    .body(body).button("§l Kembali").show(player);
+    .title(`§b  ★ STATISTIK — ${player.name}  §r`)
+    .body(body).button(" Kembali").show(player);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -942,7 +946,7 @@ async function showGlobalHistory(player) {
     body += `§f${i+1}. §a${h.p} §8[${h.t === "PT" ? "§5PT" : "§6EQ"}§8]\n   ${R[h.r]?.color ?? "§f"}${h.n} §8(${h.r[0]})\n`;
   });
   body += `\n${HR}`;
-  await new ActionFormData().title("§l§e  ★ GLOBAL HISTORY ★  §r").body(body).button("§l Kembali").show(player);
+  await new ActionFormData().title("§e  ★ GLOBAL HISTORY ★  §r").body(body).button(" Kembali").show(player);
 }
 
 async function showRewardInfo(player, type) {
@@ -951,7 +955,7 @@ async function showRewardInfo(player, type) {
   let body = `${HR}\n`;
   for (const rk of R_KEYS) {
     const items = pool.filter(i => i.rarity === rk); if (!items.length) continue;
-    body += `${R[rk].color}§l[${rk[0]}] ${R[rk].label} — ${pctStr(R[rk][wKey], totalW)}%\n`;
+    body += `${R[rk].color}[${rk[0]}] ${R[rk].label} — ${pctStr(R[rk][wKey], totalW)}%\n`;
     items.forEach(item => { body += `  §7• §f${item.name}${isPt && player.hasTag(item.tag) ? " §a[✔]" : ""}\n`; });
   }
   body += `${HR}\n`;
@@ -959,14 +963,14 @@ async function showRewardInfo(player, type) {
     ? `§7Pity Rare+: tiap §e${CFG.PT_PITY_RARE}x  §7Dup: §b+${CFG.GEM_REFUND} Gem\n`
     : `§7Pity Rare+: §e${CFG.EQ_PITY_RARE}x  §7Legend: §e${CFG.EQ_PITY_LEG}x\n`;
   await new ActionFormData()
-    .title(isPt ? "§l§5  INFO PARTIKEL  §r" : "§l§6  INFO PERALATAN  §r")
-    .body(body).button("§l Kembali").show(player);
+    .title(isPt ? "§5  INFO PARTIKEL  §r" : "§6  INFO PERALATAN  §r")
+    .body(body).button(" Kembali").show(player);
 }
 
 async function showDiscountInput(player, gachaType) {
   const cur  = pendingDisc.get(player.id);
   const hint = cur ? `§aAktif: ${cur.code} (-${cur.pct}%)\n§fKode baru / kosongkan utk hapus:` : "§fMasukkan kode:";
-  const res  = await new ModalFormData().title("§l§e  Kode Diskon  §r")
+  const res  = await new ModalFormData().title("§e  Kode Diskon  §r")
     .textField(hint, "Contoh: HEMAT50", { defaultValue: "" }).show(player);
   if (res.canceled) return;
   const raw = String(res.formValues?.[0] ?? "").trim().toUpperCase();
@@ -985,7 +989,7 @@ async function showNoBal(player, needed, type) {
   return new ActionFormData().title("§c  ⚠ Saldo Kurang  §r")
     .body(`${HR}\n§f Butuh : §c${needed} ${unit}\n§f Punya  : §e${cur} ${unit}\n${HR}\n` +
       (isPt ? "§7Gem dari top-up atau event." : "§7Kumpulkan koin di dalam game!"))
-    .button("§l Oke").button("§l Kembali").show(player);
+    .button(" Oke").button(" Kembali").show(player);
 }
 
 async function showResultForm(player, results, is10x, type, baseCost) {
@@ -994,24 +998,24 @@ async function showResultForm(player, results, is10x, type, baseCost) {
   if (is10x) {
     const best = results[results.length - 1];
     const { color: bc, label: bl } = R[best.rarity];
-    let body = results.some(r => r.rarity === "LEGENDARY" && !r.isDup) ? "§6§l  [LEGENDARY]\n\n" : "";
+    let body = results.some(r => r.rarity === "LEGENDARY" && !r.isDup) ? "§6  [LEGENDARY]\n\n" : "";
     body += `§f10x Pull:\n${HR}\n`;
     results.forEach((r, i) => {
       body += `§f${i+1}. ${R[r.rarity].color}[${r.rarity[0]}] §f${r.name}${r.isDup ? " §7(D)" : (isPt ? " §a[+]" : "")}\n`;
     });
     body += `${HR}\n`;
     if (isPt) { const dc = results.filter(r => r.isDup).length; if (dc) body += `§e${dc} dup -> §b+${dc * CFG.GEM_REFUND} Gem\n`; }
-    body += `§f Best: ${bc}§l[${bl}] ${best.name}\n§f Sisa: §e${cur}${unit}`;
-    return new ActionFormData().title("§l  HASIL 10x  §r").body(body)
-      .button("§l Selesai").button(`§l Pull 10x Lagi - ${baseCost} ${unit}`).show(player);
+    body += `§f Best: ${bc}[${bl}] ${best.name}\n§f Sisa: §e${cur}${unit}`;
+    return new ActionFormData().title("  HASIL 10x  §r").body(body)
+      .button(" Selesai").button(` Pull 10x Lagi - ${baseCost} ${unit}`).show(player);
   } else {
     const r = results[0], { color, label } = R[r.rarity];
-    let body = r.rarity === "LEGENDARY" && !r.isDup ? "§6§l  [LEGENDARY]\n\n" : "";
-    body += `${HR}\n${color}§l[ ${label.toUpperCase()} ]\n§f ${r.name}\n${HR}\n`;
+    let body = r.rarity === "LEGENDARY" && !r.isDup ? "§6  [LEGENDARY]\n\n" : "";
+    body += `${HR}\n${color}[ ${label.toUpperCase()} ]\n§f ${r.name}\n${HR}\n`;
     body += isPt ? (r.isDup ? `§e Dup! §b+${CFG.GEM_REFUND} Gem\n` : "§a Partikel baru!\n") : "§7 Masuk inventory / pending.\n";
     body += `§f Sisa: §e${cur}${unit}`;
-    return new ActionFormData().title("§l  HASIL PULL  §r").body(body)
-      .button("§l Selesai").button(`§l Pull 1x Lagi - ${baseCost} ${unit}`).show(player);
+    return new ActionFormData().title("  HASIL PULL  §r").body(body)
+      .button(" Selesai").button(` Pull 1x Lagi - ${baseCost} ${unit}`).show(player);
   }
 }
 
@@ -1027,28 +1031,29 @@ async function showAdminMenu(player) {
     const regChests  = getAllowedChestsCached();
     const hasStagedImport = dpGet(K_STAGED_IMPORT, null) !== null;
 
-    const form = new ActionFormData().title("§l§c  ADMIN PANEL  §r")
+    const form = new ActionFormData().title("§c  ADMIN PANEL  §r")
       .body(
-        `${HR}\n§c§lADMIN  §7| §fLogin: §a${player.name}  §7Online: §f${world.getPlayers().length}\n` +
+        `${HR}\n§cADMIN  §7| §fLogin: §a${player.name}  §7Online: §f${world.getPlayers().length}\n` +
         `§7Kode: §f${Object.keys(codes).length}  §7| §7Player: §f${Object.keys(reg).length}\n` +
         `§7Chest Terdaftar: §a${regChests.length}\n` +
         (pendImps ? `§e⚠ Pending import: ${pendImps} player\n` : "") +
         (hasStagedImport ? `§b⚡ Data import siap dikonfirmasi!\n` : "") +
         HR
       )
-      .button("§l Kelola Gem Player")
-      .button("§l Kelola Koin Player")
-      .button("§l Buat Kode Diskon")
-      .button("§l Hapus Kode Diskon")
-      .button("§l Lihat Semua Kode")
-      .button("§l Export / Import Semua")
-      .button("§l Cara Daftarkan Chest")
-      .button("§l Kelola Chest Terdaftar")
-      .button("§l Kembali");
+      .button(" Kelola Gem Player")
+      .button(" Kelola Koin Player")
+      .button(" Buat Kode Diskon")
+      .button(" Hapus Kode Diskon")
+      .button(" Lihat Semua Kode")
+      .button(" Export / Import Semua")
+      .button(" Cara Daftarkan Chest")
+      .button(" Kelola Chest Terdaftar")
+      .button(" Kembali");
 
     sfx(player, SFX.ADMIN);
     const res = await form.show(player);
-    if (res.canceled || res.selection === 8) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === 8) return;
     if      (res.selection === 0) await showAdminPlayerSelect(player, "gem");
     else if (res.selection === 1) await showAdminPlayerSelect(player, "coin");
     else if (res.selection === 2) await showAdminCreateCode(player);
@@ -1074,7 +1079,7 @@ async function showAdminPlayerSelect(adminPlayer, currency) {
     if (!allPlayers.length) { adminPlayer.sendMessage("§c[!] Tidak ada player tersimpan."); return; }
 
     const form = new ActionFormData()
-      .title(`§l§b  Pilih Player — ${currency === "gem" ? "Gem" : "Koin"}  §r`)
+      .title(`§b  Pilih Player — ${currency === "gem" ? "Gem" : "Koin"}  §r`)
       .body(`${HR}\n§aHijau = online  §7Abu = offline\n${HR}`);
     for (const p of allPlayers) {
       const gemVal  = p.isOnline ? getGem(p.playerObj)  : (reg[p.id]?.gem  ?? 0);
@@ -1086,9 +1091,10 @@ async function showAdminPlayerSelect(adminPlayer, currency) {
         `${currency === "gem" ? `§b${gemVal} gem${pendG}` : `§e${coinVal} koin${pendC}`}`
       );
     }
-    form.button("§l Kembali");
+    form.button(" Kembali");
     const res = await form.show(adminPlayer);
-    if (res.canceled || res.selection === allPlayers.length) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === allPlayers.length) return;
 
     const selected = allPlayers[res.selection];
     if (selected.isOnline) {
@@ -1110,11 +1116,12 @@ async function showAdminAction(adminPlayer, target, currency) {
     if (!live) { adminPlayer.sendMessage(`§c[!] §f${target.name} §csudah offline.`); return false; }
     const curBal = isGem ? getGem(live) : getCoin(live);
     const form = new ActionFormData()
-      .title(`§l  ${isGem ? "Gem" : "Koin"} — ${live.name}  §r`)
+      .title(`  ${isGem ? "Gem" : "Koin"} — ${live.name}  §r`)
       .body(`${HR}\n§f ${live.name}  ${isGem ? "§b" : "§e"}${curBal} ${currency}\n${HR}`)
-      .button("§l Tambah").button("§l Kurangi").button("§l Set Nilai").button("§l Kembali");
+      .button(" Tambah").button(" Kurangi").button(" Set Nilai").button(" Kembali");
     const res = await form.show(adminPlayer);
-    if (res.canceled || res.selection === 3) return false;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === 3) return false;
     const done = await showAdminAmountInput(adminPlayer, live, currency, ["add","remove","set"][res.selection]);
     if (done) return true;
   }
@@ -1125,7 +1132,7 @@ async function showAdminAmountInput(adminPlayer, target, currency, action) {
   const curBal = isGem ? getGem(target) : getCoin(target);
   const actLbl = action === "add" ? "Tambah" : action === "remove" ? "Kurangi" : "Set";
   const res    = await new ModalFormData()
-    .title(`§l  ${actLbl} ${isGem ? "Gem" : "Koin"} — ${target.name}`)
+    .title(`  ${actLbl} ${isGem ? "Gem" : "Koin"} — ${target.name}`)
     .textField(`§f${actLbl} §7(sekarang: §f${curBal}§7)`, "Contoh: 100", { defaultValue: "0" }).show(adminPlayer);
   if (res.canceled) return false;
   const amount = Math.floor(Number(String(res.formValues?.[0] ?? "0").trim()));
@@ -1166,20 +1173,20 @@ async function showAdminActionOffline(adminPlayer, target, currency, reg) {
   const curBal  = pendVal !== null ? pendVal : regBal;
 
   const form = new ActionFormData()
-    .title(`§l  ${isGem ? "Gem" : "Koin"} — ${target.name} §7(Offline)  §r`)
+    .title(`  ${isGem ? "Gem" : "Koin"} — ${target.name} §7(Offline)  §r`)
     .body(
       `${HR}\n§7○ §f${target.name}  ${isGem ? "§b" : "§e"}${curBal} ${currency}` +
       (hasPend ? `\n§e⚠ Ada perubahan pending (belum login): §f${pendVal}` : "") +
       `\n${HR}\n§7Perubahan diterapkan saat player login.\n${HR}`
     )
-    .button("§l Tambah").button("§l Kurangi").button("§l Set Nilai").button("§l Kembali");
+    .button(" Tambah").button(" Kurangi").button(" Set Nilai").button(" Kembali");
   const res = await form.show(adminPlayer);
   if (res.canceled || res.selection === 3) return false;
 
   const action = ["add","remove","set"][res.selection];
   const actLbl = action === "add" ? "Tambah" : action === "remove" ? "Kurangi" : "Set";
   const inputRes = await new ModalFormData()
-    .title(`§l  ${actLbl} ${isGem ? "Gem" : "Koin"} — ${target.name} (Offline)`)
+    .title(`  ${actLbl} ${isGem ? "Gem" : "Koin"} — ${target.name} (Offline)`)
     .textField(`§f${actLbl} §7(sekarang: §f${curBal}§7)`, "Contoh: 100", { defaultValue: "0" })
     .show(adminPlayer);
   if (inputRes.canceled) return false;
@@ -1211,7 +1218,7 @@ async function showAdminActionOffline(adminPlayer, target, currency, reg) {
 }
 
 async function showAdminCreateCode(adminPlayer) {
-  const res = await new ModalFormData().title("§l§a  Buat Kode Diskon  §r")
+  const res = await new ModalFormData().title("§a  Buat Kode Diskon  §r")
     .textField("§fNama Kode §7(A-Z, 0-9, _ | 3-20 karakter)", "Contoh: HEMAT50", { defaultValue: "" })
     .slider("§fDiskon (%)", 5, 90, 5, 50)
     .dropdown("§fBerlaku untuk", ["Semua Gacha", "Partikel Saja", "Peralatan Saja"], 0)
@@ -1233,13 +1240,13 @@ async function showAdminDeleteCode(adminPlayer) {
   const map = getDiscCodes(), codes = Object.keys(map);
   if (!codes.length) { adminPlayer.sendMessage("§7Tidak ada kode aktif."); return; }
   const typeLblMap = { ALL:"Semua", PT:"Partikel", EQ:"Peralatan" };
-  const form = new ActionFormData().title("§l§c  Hapus Kode  §r").body(`${HR}\n§7 Pilih kode:\n${HR}`);
-  for (const code of codes) { const e = map[code]; form.button(`§l ${code}\n§f${e.pct}% | ${typeLblMap[e.type]??e.type} | §e${e.uses}x`); }
-  form.button("§l Kembali");
+  const form = new ActionFormData().title("§c  Hapus Kode  §r").body(`${HR}\n§7 Pilih kode:\n${HR}`);
+  for (const code of codes) { const e = map[code]; form.button(` ${code}\n§f${e.pct}% | ${typeLblMap[e.type]??e.type} | §e${e.uses}x`); }
+  form.button(" Kembali");
   const res = await form.show(adminPlayer);
   if (res.canceled || res.selection === codes.length) return;
   const targetCode = codes[res.selection];
-  const confirm = await new MessageFormData().title("§l  Konfirmasi  §r")
+  const confirm = await new MessageFormData().title("  Konfirmasi  §r")
     .body(`§f Hapus kode §c${targetCode}§f?`)
     .button1("§f  Batal").button2("§c  Ya, Hapus").show(adminPlayer);
   if (!confirm.canceled && confirm.selection === 1) {
@@ -1255,7 +1262,7 @@ async function showAdminListCodes(adminPlayer) {
   let body = `${HR}\n§7 Kode aktif: §f${codes.length}\n${HR}\n`;
   if (!codes.length) body += "\n§7 (Tidak ada kode aktif)\n";
   else for (const code of codes) { const e = map[code]; body += `\n§f ${code}  §a${e.pct}%  §7${typeLblMap[e.type]??e.type}  §e${e.uses}x\n`; }
-  await new ActionFormData().title("§l  Daftar Kode  §r").body(body).button("§l Kembali").show(adminPlayer);
+  await new ActionFormData().title("  Daftar Kode  §r").body(body).button(" Kembali").show(adminPlayer);
 }
 
 async function showAdminRegisterChest(adminPlayer, block = null) {
@@ -1263,7 +1270,7 @@ async function showAdminRegisterChest(adminPlayer, block = null) {
 
   if (!block) {
     await new ActionFormData()
-      .title("§l  Daftarkan Chest  §r")
+      .title("  Daftarkan Chest  §r")
       .body(
         `${HR}\n§e Cara mendaftarkan chest:\n\n` +
         `§7Pegang §fAmethyst Shard §7lalu §aklik langsung §7ke chest\n§7yang ingin didaftarkan.\n\n` +
@@ -1272,7 +1279,7 @@ async function showAdminRegisterChest(adminPlayer, block = null) {
         `§7• §cCrying Obsidian §7→ Gacha Peralatan\n` +
         `§7• Bukan double chest\n${HR}`
       )
-      .button("§l Oke").show(adminPlayer);
+      .button(" Oke").show(adminPlayer);
     return;
   }
 
@@ -1285,14 +1292,14 @@ async function showAdminRegisterChest(adminPlayer, block = null) {
 
   if (allowed.some(c => c.key === key)) {
     await new ActionFormData()
-      .title("§l  Daftarkan Chest  §r")
+      .title("  Daftarkan Chest  §r")
       .body(`${HR}\n§e Chest ini sudah terdaftar!\n§f ${typeLbl}§f @ ${x}, ${y}, ${z}\n${HR}`)
-      .button("§l Oke").show(adminPlayer);
+      .button(" Oke").show(adminPlayer);
     return;
   }
 
   const inputRes = await new ModalFormData()
-    .title("§l  Daftarkan Chest  §r")
+    .title("  Daftarkan Chest  §r")
     .textField(
       `§f Chest ditemukan: ${typeLbl}\n§7 Posisi: §f${x}, ${y}, ${z}\n§7 Label (opsional):`,
       "Contoh: Chest Spawn", { defaultValue: "" }
@@ -1320,16 +1327,16 @@ async function showAdminManageChests(adminPlayer) {
     const allowed = getAllowedChestsCached();
     if (!allowed.length) {
       await new ActionFormData()
-        .title("§l  Kelola Chest  §r")
+        .title("  Kelola Chest  §r")
         .body(`${HR}\n§7 Belum ada chest yang terdaftar.\n${HR}`)
-        .button("§l Kembali").show(adminPlayer);
+        .button(" Kembali").show(adminPlayer);
       return;
     }
 
     const ptCount = allowed.filter(c => c.type === "PARTICLE").length;
     const eqCount = allowed.filter(c => c.type === "EQUIPMENT").length;
     const form = new ActionFormData()
-      .title("§l  Kelola Chest Terdaftar  §r")
+      .title("  Kelola Chest Terdaftar  §r")
       .body(
         `${HR}\n§fTotal: §a${allowed.length} chest\n` +
         `§5Partikel: §f${ptCount}  §6Peralatan: §f${eqCount}\n` +
@@ -1341,11 +1348,12 @@ async function showAdminManageChests(adminPlayer) {
       const inUse   = activeChests.has(c.key) ? " §c[AKTIF]" : "";
       form.button(`${typeLbl} §f${c.label}${inUse}\n§b${c.x}, ${c.y}, ${c.z}`);
     }
-    form.button("§l Kembali");
+    form.button(" Kembali");
 
     sfx(adminPlayer, SFX.ADMIN);
     const res = await form.show(adminPlayer);
-    if (res.canceled || res.selection === allowed.length) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === allowed.length) return;
 
     const target  = allowed[res.selection];
     const typeLbl = target.type === "PARTICLE" ? "§5Partikel" : "§6Peralatan";
@@ -1356,7 +1364,7 @@ async function showAdminManageChests(adminPlayer) {
     }
 
     const confirm = await new MessageFormData()
-      .title("§l  Hapus Chest?  §r")
+      .title("  Hapus Chest?  §r")
       .body(
         `§f Hapus chest dari whitelist?\n\n` +
         `${typeLbl}§f — ${target.label}\n§7${target.x}, ${target.y}, ${target.z}\n\n` +
@@ -1392,7 +1400,7 @@ async function showExportImportAllUI(adminPlayer) {
     const stagedImport    = dpGet(K_STAGED_IMPORT, null);
     const hasStagedImport = stagedImport !== null;
 
-    const form = new ActionFormData().title("§l§3  Export / Import  §r")
+    const form = new ActionFormData().title("§3  Export / Import  §r")
       .body(
         `${HR}\n§7Format: §fGSALL5  §7(hanya player dengan Gem atau Partikel)\n` +
         (pendingCount ? `§e⚠ ${pendingCount} player menunggu pending import\n` : "") +
@@ -1401,22 +1409,23 @@ async function showExportImportAllUI(adminPlayer) {
           : `§7Belum ada data import yang disiapkan\n`) +
         HR
       )
-      .button("§l Export Data")
-      .button(hasStagedImport ? "§l§c Import Data §e[SIAP ⚡]" : "§l Import Data")
-      .button("§l Pending Import")
-      .button(hasStagedImport ? "§l§f Hapus Data Staged" : "§8 Hapus Data Staged")
-      .button("§l Kembali");
+      .button(" Export Data")
+      .button(hasStagedImport ? "§c Import Data §e[SIAP ⚡]" : " Import Data")
+      .button(" Pending Import")
+      .button(hasStagedImport ? "§f Hapus Data Staged" : "§8 Hapus Data Staged")
+      .button(" Kembali");
 
     sfx(adminPlayer, SFX.ADMIN);
     const res = await form.show(adminPlayer);
-    if (res.canceled || res.selection === 4) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === 4) return;
     if      (res.selection === 0) await showBulkExportUI(adminPlayer);
     else if (res.selection === 1) await showBulkImportUI(adminPlayer);
     else if (res.selection === 2) await showPendingImportList(adminPlayer);
     else if (res.selection === 3) {
       if (!hasStagedImport) { adminPlayer.sendMessage("§7Tidak ada data staged untuk dihapus."); continue; }
       const confirm = await new MessageFormData()
-        .title("§l  Hapus Data Staged?  §r")
+        .title("  Hapus Data Staged?  §r")
         .body(`§f Hapus data import yang sedang disiapkan?\n§7Data ini tidak akan diterapkan.`)
         .button1("§f Batal").button2("§c Ya, Hapus").show(adminPlayer);
       if (!confirm.canceled && confirm.selection === 1) {
@@ -1434,14 +1443,14 @@ async function showBulkExportUI(adminPlayer) {
   logBulkToConsole({ entries, full });
 
   if (!entries.length) {
-    await new ActionFormData().title("§l§3  Export Data  §r")
+    await new ActionFormData().title("§3  Export Data  §r")
       .body(`${HR}\n§7Belum ada player dengan Gem atau Partikel.\n${HR}`)
-      .button("§l Kembali").show(adminPlayer);
+      .button(" Kembali").show(adminPlayer);
     return;
   }
 
   await new ModalFormData()
-    .title(`§l§3  Export Data — ${entries.length} player  §r`)
+    .title(`§3  Export Data — ${entries.length} player  §r`)
     .textField(
       `§eSalin seluruh string di bawah ini:\n§7${entries.length} player · ${full.length} karakter`,
       "", { defaultValue: full }
@@ -1456,7 +1465,7 @@ async function showBulkImportUI(adminPlayer) {
 
   if (!staged) {
     await new ActionFormData()
-      .title("§l§6  Import Data  §r")
+      .title("§6  Import Data  §r")
       .body(
         `${HR}\n§e⚠ Belum ada data import yang disiapkan.\n\n` +
         `§fCara menyiapkan data import:\n\n` +
@@ -1469,20 +1478,20 @@ async function showBulkImportUI(adminPlayer) {
         `§8Konfirmasi dilakukan dari UI ini.\n` +
         `${HR}`
       )
-      .button("§l Mengerti").show(adminPlayer);
+      .button(" Mengerti").show(adminPlayer);
     return;
   }
 
   const parsed = parseBulkImport(staged.str ?? "");
   if (!parsed.ok) {
     await new ActionFormData()
-      .title("§l§c  Import Data — Data Tidak Valid  §r")
+      .title("§c  Import Data — Data Tidak Valid  §r")
       .body(
         `${HR}\n§cData yang di-stage tidak valid:\n§f${parsed.err}\n\n` +
         `§7Hapus data ini dan ulangi dengan:\n` +
         `§f/scriptevent gacha:prepare_import §bGSALL5|...\n${HR}`
       )
-      .button("§l Hapus & Kembali").show(adminPlayer);
+      .button(" Hapus & Kembali").show(adminPlayer);
     dpDel(K_STAGED_IMPORT);
     return;
   }
@@ -1494,19 +1503,19 @@ async function showBulkImportUI(adminPlayer) {
     : "tidak diketahui";
 
   const step1 = await new ActionFormData()
-    .title("§l§6  Konfirmasi Import — Periksa Data  §r")
+    .title("§6  Konfirmasi Import — Periksa Data  §r")
     .body(
       `${HR}\n§e★ Data Import Tersedia:\n` +
       `§f • Jumlah player  : §a${items.length}\n` +
       `§f • Disiapkan oleh : §a${stagedBy}\n` +
       `§f • Waktu staging  : §7${stagedAt}\n` +
       `${HR}\n` +
-      `§4§l⚠⚠  PERINGATAN BAHAYA  ⚠⚠§r\n\n` +
+      `§4⚠⚠  PERINGATAN BAHAYA  ⚠⚠§r\n\n` +
       `§cOperasi ini akan MENIMPA data permanen:\n\n` +
       `§f  • §cGem §fsemua player dalam string\n` +
       `§f  • §cKoleksi partikel §fsemua player\n` +
       `§f  • §cPity counter §fequipment semua player\n\n` +
-      `§c§lData yang ditimpa TIDAK BISA dipulihkan!\n§r\n` +
+      `§cData yang ditimpa TIDAK BISA dipulihkan!\n§r\n` +
       `§e• Player online → langsung terpengaruh\n` +
       `§e• Player offline → terpengaruh saat login\n\n` +
       `§7Pastikan kamu sudah backup data sebelum lanjut.\n` +
@@ -1520,9 +1529,9 @@ async function showBulkImportUI(adminPlayer) {
   if (step1.canceled || step1.selection !== 1) return;
 
   const step2 = await new MessageFormData()
-    .title("§l§4  !! KONFIRMASI AKHIR !!  §r")
+    .title("§4  !! KONFIRMASI AKHIR !!  §r")
     .body(
-      `§4§l⚠ TINDAKAN TIDAK BISA DI-UNDO! ⚠§r\n\n` +
+      `§4⚠ TINDAKAN TIDAK BISA DI-UNDO! ⚠§r\n\n` +
       `§fData §a${items.length} player §fakan ditimpa sekarang.\n\n` +
       `§eApakah kamu benar-benar yakin ingin melanjutkan?`
     )
@@ -1558,9 +1567,9 @@ async function showPendingImportList(adminPlayer) {
     .map(([id, info]) => ({ id, name: info.name }));
 
   if (!pending.length) {
-    await new ActionFormData().title("§l  Pending Import  §r")
+    await new ActionFormData().title("  Pending Import  §r")
       .body(`${HR}\n§7 Tidak ada pending import aktif.\n${HR}`)
-      .button("§l Kembali").show(adminPlayer);
+      .button(" Kembali").show(adminPlayer);
     return;
   }
 
@@ -1571,15 +1580,15 @@ async function showPendingImportList(adminPlayer) {
   }
   body += HR;
 
-  const form = new ActionFormData().title("§l  Pending Import  §r").body(body);
-  for (const e of pending) form.button(`§l Batalkan: §f${e.name}`);
-  form.button("§l Kembali");
+  const form = new ActionFormData().title("  Pending Import  §r").body(body);
+  for (const e of pending) form.button(` Batalkan: §f${e.name}`);
+  form.button(" Kembali");
 
   const res = await form.show(adminPlayer);
   if (res.canceled || res.selection === pending.length) return;
 
   const target  = pending[res.selection];
-  const confirm = await new MessageFormData().title("§l  Batalkan Pending?  §r")
+  const confirm = await new MessageFormData().title("  Batalkan Pending?  §r")
     .body(`§f Batalkan pending import untuk §c${target.name}§f?`)
     .button1("§f Tidak").button2("§c Ya, Batalkan").show(adminPlayer);
   if (!confirm.canceled && confirm.selection === 1) {
@@ -1715,7 +1724,7 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
       sfx(player, SFX.CLAIM);
       player.sendMessage(`§a[+] ${n} item pending diklaim saat login!${rem ? `\n§e${rem} item masih pending.` : ""}`);
     } else {
-      player.sendMessage(`§e⚠ ${list.length} item pending (inv penuh).\n§7Pegang §bAmethyst Shard §7dan klik chest.`);
+      player.sendMessage(`§e⚠ ${list.length} item pending (inv penuh).\n§7Klik §bchest gacha §7untuk klaim.`);
     }
   }, 60);
 });
@@ -1781,7 +1790,7 @@ world.afterEvents.itemUse.subscribe(ev => {
       const claimed = claimPend(player);
       if (claimed > 0) { sfx(player, SFX.CLAIM); player.sendMessage(`§a[+] ${claimed} item diklaim otomatis.`); }
       await showHubMenu(player);
-    } catch (err) { console.error("[Gacha] Hub error:", err); }
+    } catch (err) { if (!err?.isUIClose) console.error("[Gacha] Hub error:", err); }
     finally { activePlayers.delete(player.id); }
   });
 });
@@ -1803,7 +1812,7 @@ world.beforeEvents.playerInteractWithBlock.subscribe(ev => {
       const claimed = claimPend(player);
       if (claimed > 0) { sfx(player, SFX.CLAIM); player.sendMessage(`§a[+] ${claimed} item diklaim otomatis.`); }
       await showHubMenu(player);
-    } catch (err) { console.error("[Gacha] Hub error:", err); }
+    } catch (err) { if (!err?.isUIClose) console.error("[Gacha] Hub error:", err); }
     finally { activePlayers.delete(player.id); }
   });
 });

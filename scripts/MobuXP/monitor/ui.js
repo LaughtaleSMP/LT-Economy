@@ -24,7 +24,7 @@ function profilePlayers() {
   try {
     const players = world.getPlayers();
     for (const p of players) {
-      let score = 0, details = [];
+      let score = 0, details = [], rd = 0;
       try {
         const nearby = p.dimension.getEntities({ location: p.location, maxDistance: 32 });
         const ents = nearby.length;
@@ -50,7 +50,15 @@ function profilePlayers() {
         if (p.dimension.id === "minecraft:nether") { score += 5; details.push("neth"); }
         if (p.dimension.id === "minecraft:the_end") { score += 3; details.push("end"); }
       } catch {}
-      results.push({ name: p.name, score, details: details.join(",") });
+      try {
+        rd = p.clientSystemInfo?.maxRenderDistance ?? 0;
+        if (rd > 0) {
+          const chunks = (rd * 2 + 1) ** 2;
+          if (rd > 16) score += Math.floor((rd - 16) * 3);
+          details.push(`${rd}ch`);
+        }
+      } catch {}
+      results.push({ name: p.name, score, details: details.join(","), rd });
     }
   } catch {}
   results.sort((a, b) => b.score - a.score);
@@ -98,7 +106,7 @@ async function _menuLoop(player) {
     const pCount    = players.length;
 
     let body = `${LINE}\n`;
-    body += `§6§l  S E R V E R   H E A L T H\n`;
+    body += `§6  S E R V E R   H E A L T H\n`;
     body += `${LINE}\n\n`;
 
     // TPS Section
@@ -131,41 +139,41 @@ async function _menuLoop(player) {
     body += `\n${LINE}`;
 
     const form = new ActionFormData()
-      .title("§l§8 ♦ §6MONITOR§r§l §8♦ §r")
+      .title("§8 ♦ §6MONITOR§r §8♦ §r")
       .body(body);
     const btns = [];
 
     // Emergency Clean
-    form.button(`§c§l  ⚔ Emergency Clean\n§r  §eHapus hostile mob jauh`);
+    form.button(`§c  Emergency Clean\n§r  §eHapus hostile mob jauh`, "textures/items/diamond_sword");
     btns.push("clean_hostile");
 
     // Clean Items
-    form.button(`§e§l  ✦ Clean Items\n§r  §eHapus item & orb di ground`);
+    form.button(`§e  Clean Items\n§r  §eHapus item & orb di ground`, "textures/items/iron_shovel");
     btns.push("clean_items");
 
     // Toggle Throttle
-    form.button(`${throttle ? "§c" : "§a"}§l  ⚙ Auto-Throttle: ${throttleLabel}\n§r  §eToggle auto-response`);
+    form.button(`${throttle ? "§c" : "§a"}  Auto-Throttle: ${throttleLabel}\n§r  §eToggle auto-response`, "textures/items/compass_item");
     btns.push("toggle_throttle");
 
     const hudActive = player.hasTag("monitor");
-    form.button(`§b§l  ◆ Toggle HUD\n§r  §e${hudActive ? "HUD aktif" : "HUD mati"}`);
+    form.button(`§b  Toggle HUD\n§r  §e${hudActive ? "HUD aktif" : "HUD mati"}`, "textures/items/spyglass");
     btns.push("toggle_hud");
 
-    form.button(`§c§l  ⚠ Top Lag Player\n§r  §ePlayer berpotensi lag`);
+    form.button(`§c  Top Lag Player\n§r  §ePlayer berpotensi lag`, "textures/items/redstone_dust");
     btns.push("lag_profile");
 
-    form.button(`§d§l  ◆ DP Dashboard\n§r  §eDynamic Property usage`);
+    form.button(`§d  DP Dashboard\n§r  §eDynamic Property usage`, "textures/items/paper");
     btns.push("dp_dash");
 
-    form.button(`§f§l  ✎ Reset Stats\n§r  §eReset min/max TPS & counter`);
+    form.button(`§f  Reset Stats\n§r  §eReset min/max TPS & counter`, "textures/items/clock_item");
     btns.push("reset");
 
     // Refresh
-    form.button(`§6§l  ↻ Refresh\n§r  §eUpdate data terbaru`);
+    form.button(`§6  Refresh\n§r  §eUpdate data terbaru`, "textures/items/arrow");
     btns.push("refresh");
 
     // Close
-    form.button("§6§l  ◀ Tutup");
+    form.button("§6  Tutup", "textures/items/redstone_dust");
     btns.push("close");
 
     try { player.playSound("random.click", { pitch: 1.3, volume: 0.7 }); } catch {}
@@ -176,10 +184,10 @@ async function _menuLoop(player) {
 
     if (action === "clean_hostile") {
       const confirm = await new MessageFormData()
-        .title("§l§8 ♦ §cEMERGENCY§r§l §8♦ §r")
+        .title("§8 ♦ §cEMERGENCY§r §8♦ §r")
         .body(
           `${LINE}\n` +
-          `§c§l  EMERGENCY CLEAN\n` +
+          `§c  EMERGENCY CLEAN\n` +
           `${LINE}\n${SP}\n` +
           `  §c⚠ §eHapus semua hostile mob\n` +
           `  §8  yang jauh dari player?\n${SP}\n` +
@@ -199,10 +207,10 @@ async function _menuLoop(player) {
 
     if (action === "clean_items") {
       const confirm = await new MessageFormData()
-        .title("§l§8 ♦ §eCLEAN ITEMS§r§l §8♦ §r")
+        .title("§8 ♦ §eCLEAN ITEMS§r §8♦ §r")
         .body(
           `${LINE}\n` +
-          `§e§l  CLEAN ITEMS\n` +
+          `§e  CLEAN ITEMS\n` +
           `${LINE}\n${SP}\n` +
           `  §e⚠ §eHapus semua item & XP orb\n` +
           `  §8  di ground semua dimensi?\n${SP}\n` +
@@ -257,24 +265,40 @@ async function _menuLoop(player) {
 
 async function showLagProfile(player) {
   const profiles = profilePlayers();
-  let body = `${LINE}\n§c§l  TOP LAG PLAYERS\n${LINE}\n\n`;
+  let body = `${LINE}\n§c  TOP LAG PLAYERS\n${LINE}\n\n`;
   if (!profiles.length) {
     body += "§8 Tidak ada data.\n";
   } else {
-    const medals = ["§c§l1.", "§6§l2.", "§e§l3."];
+    const medals = ["§c1.", "§62.", "§e3."];
     profiles.forEach((p, i) => {
       const rank = i < 3 ? medals[i] : `§8${i + 1}.`;
-      const bar = p.score >= 100 ? "§c⚠" : p.score >= 50 ? "§e⚡" : "§a✔";
-      body += `  ${rank} ${bar} §f${p.name}\n`;
-      body += `  §8   Score: §f${p.score} §8| §7${p.details}\n`;
+      const bar = p.score >= 100 ? "§c" : p.score >= 50 ? "§6" : "§a";
+      const rdLabel = p.rd > 0 ? ` §8RD:§f${p.rd}` : "";
+      const rdWarn = p.rd > 16 ? " §c!" : "";
+      body += `  ${rank} ${bar}§f${p.name}${rdWarn}\n`;
+      body += `  §8   Score: §f${p.score}${rdLabel} §8| §7${p.details}\n`;
     });
   }
-  body += `\n§8Skor = entity nearby×2 + items×3 + effects + dim\n`;
-  body += `${LINE}`;
+  body += `\n§e SKOR FORMULA\n${LINE_THIN}\n`;
+  body += `§8  Entity nearby ×2 + Items ×3\n`;
+  body += `§8  Effects (>3) ×2 + Dimension\n`;
+  body += `§8  RenderDist (>16) ×3\n`;
+  body += `\n§e RENDER DISTANCE\n${LINE_THIN}\n`;
+  if (profiles.length > 0) {
+    for (const p of profiles) {
+      if (p.rd > 0) {
+        const chunks = (p.rd * 2 + 1) ** 2;
+        const rdColor = p.rd > 16 ? "§c" : p.rd > 10 ? "§e" : "§a";
+        body += `  §f${p.name} §8── ${rdColor}${p.rd} chunks §8(${chunks} total)\n`;
+      }
+    }
+    if (!profiles.some(p => p.rd > 0)) body += "  §8Data tidak tersedia.\n";
+  }
+  body += `\n${LINE}`;
   await new ActionFormData()
-    .title("§l§8 ◆ §cLAG PROFILE§r§l §8◆ §r")
+    .title("§8 ◆ §cLAG PROFILE§r §8◆ §r")
     .body(body)
-    .button("§6§l  ◀ Kembali")
+    .button("§6  Kembali", "textures/items/arrow")
     .show(player);
 }
 
@@ -286,7 +310,7 @@ async function showDPDashboard(player) {
   const dpBar = (filled >= barW * 0.8 ? "§c" : filled >= barW * 0.5 ? "§e" : "§a")
     + "█".repeat(filled) + "§8" + "░".repeat(barW - filled);
 
-  let body = `${LINE}\n§d§l  DP DASHBOARD\n${LINE}\n\n`;
+  let body = `${LINE}\n§d  DP DASHBOARD\n${LINE}\n\n`;
   body += `  §e◆ §eKapasitas\n`;
   body += `${LINE_THIN}\n`;
   body += `  §8├ §fUsage   §8── ${dpBar} §f${formatBytes(stats.totalBytes)}\n`;
@@ -298,10 +322,10 @@ async function showDPDashboard(player) {
   body += `${LINE}`;
 
   const form = new ActionFormData()
-    .title("§l§8 ◆ §dDP USAGE§r§l §8◆ §r")
+    .title("§8 ◆ §dDP USAGE§r §8◆ §r")
     .body(body);
-  form.button("§c§l  Cleanup Inaktif (30d)\n§r  §eHapus data player lama");
-  form.button("§6§l  ◀ Kembali");
+  form.button("§c  Cleanup Inaktif (30d)\n§r  §eHapus data player lama", "textures/items/iron_shovel");
+  form.button("§6  Kembali", "textures/items/arrow");
   const res = await form.show(player);
   if (!res.canceled && res.selection === 0) {
     const r = cleanupInactive(30, true);

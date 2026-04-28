@@ -1,24 +1,43 @@
-// daily/login.js — Login streak system
+// daily/login.js — Login streak system (Hybrid Player DP)
 import { world } from "@minecraft/server";
 import { DAILY_CFG as CFG } from "./config.js";
+import { pGet, pSet } from "../player_dp.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 function getCurrentPeriod() {
   return Math.floor((Date.now() - CFG.RESET_UTC_HOUR * 3600000) / MS_PER_DAY);
 }
 
-function readLogin(pid) {
+// Legacy read (world DP) — hanya untuk getLoginData saat player belum online
+function readLoginLegacy(pid) {
   try { const r = world.getDynamicProperty(CFG.K_LOGIN + pid); return r ? JSON.parse(r) : null; }
   catch { return null; }
 }
 
-export function getLoginData(pid) {
-  return readLogin(pid) ?? { lastPeriod: -1, streak: 0, totalDays: 0, claimed: false };
+/**
+ * Get login data. Jika player object diberikan, baca dari Player DP.
+ * Jika hanya pid (string), fallback ke world DP (legacy).
+ */
+export function getLoginData(pidOrPlayer) {
+  const def = { lastPeriod: -1, streak: 0, totalDays: 0, claimed: false };
+  if (typeof pidOrPlayer === "string") {
+    // Offline path — coba cari player online, fallback world DP
+    const p = world.getPlayers().find(pl => pl.id === pidOrPlayer);
+    if (p) return pGet(p, CFG.K_LOGIN, def);
+    return readLoginLegacy(pidOrPlayer) ?? def;
+  }
+  // Player object diberikan
+  return pGet(pidOrPlayer, CFG.K_LOGIN, def);
 }
 
-export function processLogin(pid) {
+export function processLogin(player) {
+  const pid = typeof player === "string" ? player : player.id;
+  const playerObj = typeof player === "string"
+    ? world.getPlayers().find(p => p.id === player) : player;
+  if (!playerObj) return null;
+
   const period = getCurrentPeriod();
-  const data = getLoginData(pid);
+  const data = getLoginData(playerObj);
   if (data.lastPeriod === period && data.claimed) return null;
 
   let newStreak;
@@ -31,7 +50,7 @@ export function processLogin(pid) {
 
   // Write first — abort reward if DP write fails to prevent double-claim
   try {
-    world.setDynamicProperty(CFG.K_LOGIN + pid, JSON.stringify(newData));
+    pSet(playerObj, CFG.K_LOGIN, newData);
   } catch (e) {
     console.warn("[Daily] writeLogin FAILED — aborting reward:", e);
     return null;
@@ -40,8 +59,8 @@ export function processLogin(pid) {
   return { streak: newStreak, coin: reward.coin, totalDays: newData.totalDays };
 }
 
-export function getStreakInfo(pid) {
-  const data = getLoginData(pid);
+export function getStreakInfo(pidOrPlayer) {
+  const data = getLoginData(pidOrPlayer);
   const period = getCurrentPeriod();
   const claimedToday = data.lastPeriod === period && data.claimed;
   const nextDay = claimedToday ? (data.streak % 7) : (data.lastPeriod === period - 1 ? (data.streak % 7) : 0);
@@ -54,3 +73,4 @@ export function getStreakInfo(pid) {
     allRewards: CFG.LOGIN_REWARDS,
   };
 }
+

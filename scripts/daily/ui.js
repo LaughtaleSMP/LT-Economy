@@ -9,6 +9,7 @@ import {
   getTierSummary, getResetCountdown, TIER_KEYS, TIER_META,
 } from "./quest.js";
 import { getAchievements, getAchievementSummary, claimAchievement, getStats, updateStat } from "./achievement.js";
+import { UIClose } from "../ui_close.js";
 
 // ═══════════════════════════════════════════════════════════
 // UI DESIGN TOKENS
@@ -47,7 +48,7 @@ function addCoin(player, amount) {
 // ═══════════════════════════════════════════════════════════
 export async function openDailyMenu(player) {
   while (true) {
-    const loginInfo = getStreakInfo(player.id);
+    const loginInfo = getStreakInfo(player);
     const achSummary = getAchievementSummary(player.id);
 
     // Aggregate quest stats across all tiers
@@ -60,7 +61,7 @@ export async function openDailyMenu(player) {
     }
 
     let body = `${LINE}\n`;
-    body += `§6§l  D A I L Y   S Y S T E M\n`;
+    body += `§6  D A I L Y   S Y S T E M\n`;
     body += `${LINE}\n${SP}\n`;
 
     // Login
@@ -91,35 +92,36 @@ export async function openDailyMenu(player) {
     body += `${SP}\n${LINE}`;
 
     const form = new ActionFormData()
-      .title("§l§8 ♦ §6DAILY§r§l §8♦ §r")
+      .title("§8 ♦ §6DAILY§r §8♦ §r")
       .body(body);
     const btns = [];
 
     // Login button
     if (loginInfo.claimedToday) {
-      form.button(`§8§l  Login Reward\n§r  §8✔ Sudah diklaim`);
+      form.button(`§8  Login Reward\n§r  §8Sudah diklaim`, "textures/items/clock_item");
     } else {
       const nextDay = (loginInfo.streak % 7) + 1;
       const nextCoin = CFG.LOGIN_REWARDS[loginInfo.streak % 7].coin;
-      form.button(`§a§l  ✦ Klaim Login!\n§r  §eHari ke-${nextDay} §8| §e${nextCoin} Koin`);
+      form.button(`§a  Klaim Login!\n§r  §eHari ke-${nextDay} §8| §e${nextCoin} Koin`, "textures/items/clock_item");
     }
     btns.push("login");
 
     // Quest button
     const qBadge = totalClaimable > 0 ? ` §c(${totalClaimable})` : "";
-    form.button(`§b§l  ✎ Quest${qBadge}\n§r  §e${totalDone}/${totalQuests} selesai`);
+    form.button(`§b  Quest${qBadge}\n§r  §e${totalDone}/${totalQuests} selesai`, "textures/items/book_writable");
     btns.push("quest");
 
     // Achievement button
     const aBadge = achSummary.claimable > 0 ? ` §c(${achSummary.claimable})` : "";
-    form.button(`§d§l  ✿ Achievement${aBadge}\n§r  §e${achSummary.claimed}/${achSummary.total} diklaim`);
+    form.button(`§d  Achievement${aBadge}\n§r  §e${achSummary.claimed}/${achSummary.total} diklaim`, "textures/items/nether_star");
     btns.push("achievement");
 
-    form.button("§6§l  ◀ Kembali");
+    form.button("§6  Kembali", "textures/items/arrow");
     btns.push("back");
 
     const res = await form.show(player);
-    if (res.canceled || btns[res.selection] === "back") return;
+    if (res.canceled) throw new UIClose();
+    if (btns[res.selection] === "back") return;
     if (btns[res.selection] === "login") await uiLoginDetail(player);
     else if (btns[res.selection] === "quest") await uiQuestTierSelector(player);
     else if (btns[res.selection] === "achievement") await uiAchievementCategories(player);
@@ -130,16 +132,16 @@ export async function openDailyMenu(player) {
 // LOGIN DETAIL — 7-Day Calendar
 // ═══════════════════════════════════════════════════════════
 async function uiLoginDetail(player) {
-  const info = getStreakInfo(player.id);
+  const info = getStreakInfo(player);
   const claimedIdx = (info.streak - 1) % 7;
 
   let body = `${LINE}\n`;
-  body += `§6§l  L O G I N   R E W A R D\n`;
+  body += `§6  L O G I N   R E W A R D\n`;
   body += `${LINE}\n${SP}\n`;
   body += `  §6✦ §eStreak §8── §6${info.streak} hari\n`;
   body += `  §b◆ §eTotal  §8── §b${info.totalDays} hari\n`;
   body += `${SP}\n${LINE_THIN}\n`;
-  body += `  §6§l REWARD CALENDAR\n`;
+  body += `  §6 REWARD CALENDAR\n`;
   body += `${LINE_THIN}\n${SP}\n`;
 
   for (let i = 0; i < 7; i++) {
@@ -155,9 +157,9 @@ async function uiLoginDetail(player) {
       if (info.streak === 0) { isPast = false; isCurrent = (i === 0); }
     }
 
-    if (isCurrent) body += `  §e▸ §6§lHari ${i + 1} §r§e${fmt(r.coin)} Koin §6◀\n`;
+    if (isCurrent) body += `  §e▸ §6Hari ${i + 1} §r§e${fmt(r.coin)} Koin §6◀\n`;
     else if (isPast) body += `  §a✔ §8Hari ${i + 1} §8${fmt(r.coin)} Koin\n`;
-    else if (isBonus) body += `  §8■ §dHari ${i + 1} §d§l${fmt(r.coin)} Koin §r§d★\n`;
+    else if (isBonus) body += `  §8■ §dHari ${i + 1} §d${fmt(r.coin)} Koin §r§d★\n`;
     else body += `  §8■ §8Hari ${i + 1} §8${fmt(r.coin)} Koin\n`;
   }
 
@@ -165,9 +167,9 @@ async function uiLoginDetail(player) {
   body += info.claimedToday ? `  §a✔ §aKembali besok!\n` : `  §c⚠ §cStreak reset jika skip!\n`;
   body += `${LINE}`;
 
-  const form = new ActionFormData().title("§l§8 ♦ §eLOGIN§r§l §8♦ §r").body(body);
-  if (info.claimedToday) form.button("§8§l  ✔ Sudah Diklaim\n§r  §8Kembali besok");
-  form.button("§6§l  ◀ Kembali");
+  const form = new ActionFormData().title("§8 ♦ §eLOGIN§r §8♦ §r").body(body);
+  if (info.claimedToday) form.button("§8  Sudah Diklaim\n§r  §8Kembali besok", "textures/items/clock_item");
+  form.button("§6  Kembali", "textures/items/arrow");
   await form.show(player);
 }
 
@@ -177,7 +179,7 @@ async function uiLoginDetail(player) {
 async function uiQuestTierSelector(player) {
   while (true) {
     let body = `${LINE}\n`;
-    body += `§b§l  Q U E S T\n`;
+    body += `§b  Q U E S T\n`;
     body += `${LINE}\n${SP}\n`;
     body += `  §ePilih kategori quest:\n`;
     body += `${SP}\n`;
@@ -195,7 +197,7 @@ async function uiQuestTierSelector(player) {
     body += `${LINE}`;
 
     const form = new ActionFormData()
-      .title("§l§8 ♦ §bQUEST§r§l §8♦ §r")
+      .title("§8 ♦ §bQUEST§r §8♦ §r")
       .body(body);
     const btns = [];
 
@@ -206,15 +208,16 @@ async function uiQuestTierSelector(player) {
       const badge = claimable > 0 ? ` §c(${claimable})` : "";
       const cd = getResetCountdown(tier);
 
-      form.button(`${m.color}§l  ${m.icon} ${m.label}${badge}\n§r  §e${s.done}/${s.total} §8| §f${cd}`);
+      form.button(`${m.color}  ${m.label}${badge}\n§r  §e${s.done}/${s.total} §8| §f${cd}`, m.texture);
       btns.push(tier);
     }
 
-    form.button("§6§l  ◀ Kembali");
+    form.button("§6  Kembali", "textures/items/arrow");
     btns.push("back");
 
     const res = await form.show(player);
-    if (res.canceled || btns[res.selection] === "back") return;
+    if (res.canceled) throw new UIClose();
+    if (btns[res.selection] === "back") return;
     await uiQuestList(player, btns[res.selection]);
   }
 }
@@ -231,14 +234,14 @@ async function uiQuestList(player, tier) {
     const cd = getResetCountdown(tier);
 
     let body = `${LINE}\n`;
-    body += `${m.color}§l  ${m.icon} Q U E S T   ${m.label.toUpperCase()}\n`;
+    body += `${m.color}  ${m.icon} Q U E S T   ${m.label.toUpperCase()}\n`;
     body += `${LINE}\n${SP}\n`;
     body += `  §e◷ §eReset: §f${cd}\n`;
     body += `  ${m.color}${m.icon} §f${summary.done}§8/${summary.total} §8| ${progressBar(summary.done, summary.total, 8)}\n`;
     body += `${SP}\n${LINE}`;
 
     const form = new ActionFormData()
-      .title(`§l§8 ♦ ${m.color}${m.label.toUpperCase()}§r§l §8♦ §r`)
+      .title(`§8 ♦ ${m.color}${m.label.toUpperCase()}§r §8♦ §r`)
       .body(body);
     const btns = [];
 
@@ -248,36 +251,36 @@ async function uiQuestList(player, tier) {
       let label;
 
       if (q.claimed) {
-        label = `§8§l  ✔ ${q.label}\n§r  §8Diklaim | +${fmt(q.reward)}`;
+        label = `§8  ${q.label}\n§r  §8Diklaim | +${fmt(q.reward)}`;
       } else if (q.completed) {
-        label = `§a§l  ★ ${q.label}\n§r  §e▸ Klaim §e${fmt(q.reward)} Koin!`;
+        label = `§a  ${q.label}\n§r  §eKlaim §e${fmt(q.reward)} Koin!`;
       } else if (q.type === "submit") {
-        label = `${m.color}§l  ✎ ${q.label}\n§r  ${bar} §f${q.progress}/${q.amount} §8| §e${fmt(q.reward)}⛃ ${m.color}| Serahkan`;
+        label = `${m.color}  ${q.label}\n§r  ${bar} §f${q.progress}/${q.amount} §8| §e${fmt(q.reward)}⛃ ${m.color}| Serahkan`;
       } else {
-        label = `§e§l  ✎ ${q.label}\n§r  ${bar} §f${q.progress}/${q.amount} §8| §e${fmt(q.reward)}⛃`;
+        label = `§e  ${q.label}\n§r  ${bar} §f${q.progress}/${q.amount} §8| §e${fmt(q.reward)}⛃`;
       }
-      form.button(label);
+      form.button(label, q.claimed ? "textures/items/book_normal" : q.completed ? "textures/items/book_writable" : "textures/items/book_writable");
       btns.push({ action: "quest", idx: i });
     }
 
     // Completion bonus button
     if (summary.bonusReady) {
-      form.button(`§6§l  ★ BONUS KOMPLIT!\n§r  §e▸ Klaim §e${fmt(summary.bonus)} Koin!`);
+      form.button(`§6  BONUS KOMPLIT!\n§r  §eKlaim §e${fmt(summary.bonus)} Koin!`, "textures/items/nether_star");
       btns.push({ action: "bonus" });
     } else if (summary.bonusClaimed) {
-      form.button(`§8§l  ✔ Bonus Diklaim\n§r  §8+${fmt(summary.bonus)} Koin`);
+      form.button(`§8  Bonus Diklaim\n§r  §8+${fmt(summary.bonus)} Koin`, "textures/items/nether_star");
       btns.push({ action: "none" });
     } else {
       const remain = summary.total - summary.claimed;
-      form.button(`§8§l  ★ Bonus Komplit\n§r  §8Selesaikan ${remain} lagi | §e${fmt(summary.bonus)}⛃`);
+      form.button(`§8  Bonus Komplit\n§r  §8Selesaikan ${remain} lagi | §e${fmt(summary.bonus)}⛃`, "textures/items/nether_star");
       btns.push({ action: "none" });
     }
 
-    form.button("§6§l  ◀ Kembali");
+    form.button("§6  Kembali", "textures/items/arrow");
     btns.push({ action: "back" });
 
     const res = await form.show(player);
-    if (res.canceled) return;
+    if (res.canceled) throw new UIClose();
 
     const btn = btns[res.selection];
     if (btn.action === "back") return;
@@ -290,11 +293,11 @@ async function uiQuestList(player, tier) {
         const achA = updateStat(player.id, "questsDone", 1);
         const achB = updateStat(player.id, "earned", coin);
         player.sendMessage(
-          `\n§6§l[BONUS]§r §6${m.label} komplit!\n` +
+          `\n§6[BONUS]§r §6${m.label} komplit!\n` +
           `§8  Bonus: §e+${fmt(coin)} Koin\n`
         );
         for (const ach of [...achA, ...achB])
-          player.sendMessage(`\n§d§l[Achievement]§r §f${ach.label} §eterbuka!\n§8  Klaim di §f/lt:daily\n`);
+          player.sendMessage(`\n§d[Achievement]§r §f${ach.label} §eterbuka!\n§f  Klaim di §e/lt:daily\n`);
       }
       continue;
     }
@@ -310,11 +313,11 @@ async function uiQuestList(player, tier) {
         const achA = updateStat(player.id, "questsDone", 1);
         const achB = updateStat(player.id, "earned", coin);
         player.sendMessage(
-          `\n§a§l[${m.label}]§r §a${q.label} §fselesai!\n` +
+          `\n§a[${m.label}]§r §a${q.label} §fselesai!\n` +
           `§8  Reward: §e+${fmt(coin)} Koin\n`
         );
         for (const ach of [...achA, ...achB])
-          player.sendMessage(`\n§d§l[Achievement]§r §f${ach.label} §eterbuka!\n§8  Klaim di §f/lt:daily\n`);
+          player.sendMessage(`\n§d[Achievement]§r §f${ach.label} §eterbuka!\n§f  Klaim di §e/lt:daily\n`);
       }
       continue;
     }
@@ -323,13 +326,13 @@ async function uiQuestList(player, tier) {
       const result = submitQuestItems(player, tier, btn.idx);
       if (result.success) {
         player.sendMessage(
-          `\n${m.color}§l[${m.label}]§r §fDiserahkan ${m.color}${result.taken}x\n` +
+          `\n${m.color}[${m.label}]§r §fDiserahkan ${m.color}${result.taken}x\n` +
           `§8  Progress: §f${result.progress}/${result.total} ${miniBar(result.progress, result.total)}\n`
         );
         if (result.completed)
-          player.sendMessage(`§e§l[${m.label}]§r §e${result.label} §fselesai! Klaim di menu.\n`);
+          player.sendMessage(`§e[${m.label}]§r §e${result.label} §fselesai! Klaim di menu.\n`);
       } else {
-        player.sendMessage(`§c§l[${m.label}]§r §cItem tidak ditemukan!\n`);
+        player.sendMessage(`§c[${m.label}]§r §cItem tidak ditemukan!\n`);
       }
     }
   }
@@ -346,6 +349,11 @@ const CAT_COLOR = {
   Combat: "§c", Mining: "§b", Building: "§a",
   Economy: "§e", Login: "§d", Quest: "§6",
 };
+const CAT_TEXTURE = {
+  Combat: "textures/items/diamond_sword", Mining: "textures/items/diamond_pickaxe",
+  Building: "textures/items/brick",       Economy: "textures/items/gold_ingot",
+  Login: "textures/items/clock_item",     Quest: "textures/items/book_writable",
+};
 
 async function uiAchievementCategories(player) {
   while (true) {
@@ -353,9 +361,9 @@ async function uiAchievementCategories(player) {
     const stats = getStats(player.id);
 
     let body = `${LINE}\n`;
-    body += `§d§l  A C H I E V E M E N T\n`;
+    body += `§d  A C H I E V E M E N T\n`;
     body += `${LINE}\n${SP}\n`;
-    body += `  §6§l STATISTIK\n`;
+    body += `  §6 STATISTIK\n`;
     body += `${LINE_THIN}\n`;
     body += `  §c⚔ §eKills  §8── §f${fmt(stats.kills)}\n`;
     body += `  §b◆ §eMined  §8── §f${fmt(stats.mined)}\n`;
@@ -366,7 +374,7 @@ async function uiAchievementCategories(player) {
     body += `${SP}\n${LINE}`;
 
     const form = new ActionFormData()
-      .title("§l§8 ♦ §dACHIEVEMENT§r§l §8♦ §r")
+      .title("§8 ♦ §dACHIEVEMENT§r §8♦ §r")
       .body(body);
     const catKeys = Object.keys(cats);
     const btns = [];
@@ -380,15 +388,16 @@ async function uiAchievementCategories(player) {
       const bar = progressBar(cc, list.length, 6);
       let badge = cl > 0 ? ` §c(${cl})` : "";
 
-      form.button(`${color}§l  ${icon} ${catName}${badge}\n§r  ${bar} §e${cc}/${list.length}`);
+      form.button(`${color}  ${catName}${badge}\n§r  ${bar} §e${cc}/${list.length}`, CAT_TEXTURE[catName] || "textures/items/book_normal");
       btns.push(catName);
     }
 
-    form.button("§6§l  ◀ Kembali");
+    form.button("§6  Kembali", "textures/items/arrow");
     btns.push("back");
 
     const res = await form.show(player);
-    if (res.canceled || btns[res.selection] === "back") return;
+    if (res.canceled) throw new UIClose();
+    if (btns[res.selection] === "back") return;
     await uiAchievementList(player, btns[res.selection]);
   }
 }
@@ -405,13 +414,13 @@ async function uiAchievementList(player, catName) {
     const cc = list.filter(a => a.claimed).length;
 
     let body = `${LINE}\n`;
-    body += `${color}§l  ${icon} ${catName.toUpperCase()}\n`;
+    body += `${color}  ${icon} ${catName.toUpperCase()}\n`;
     body += `${LINE}\n${SP}\n`;
     body += `  §eProgress: §f${cc}§8/${list.length}  ${progressBar(cc, list.length, 8)}\n`;
     body += `${SP}\n${LINE}`;
 
     const form = new ActionFormData()
-      .title(`§l§8 ♦ ${color}${catName.toUpperCase()}§r§l §8♦ §r`)
+      .title(`§8 ♦ ${color}${catName.toUpperCase()}§r §8♦ §r`)
       .body(body);
     const btns = [];
 
@@ -420,21 +429,22 @@ async function uiAchievementList(player, catName) {
       let label;
 
       if (ach.claimed) {
-        label = `§8§l  ✔ §m${ach.label}§r\n  §8Diklaim | +${fmt(ach.reward)}`;
+        label = `§8  ${ach.label}\n§r  §8Diklaim | +${fmt(ach.reward)}`;
       } else if (ach.unlocked) {
-        label = `§a§l  ★ ${ach.label}\n§r  §e▸ Klaim §e${fmt(ach.reward)} Koin!`;
+        label = `§a  ${ach.label}\n§r  §eKlaim §e${fmt(ach.reward)} Koin!`;
       } else {
-        label = `§e§l  ${ach.label}\n§r  ${bar} §f${fmt(ach.current)}/${fmt(ach.target)} §8| §e${fmt(ach.reward)}⛃`;
+        label = `§e  ${ach.label}\n§r  ${bar} §f${fmt(ach.current)}/${fmt(ach.target)} §8| §e${fmt(ach.reward)}⛃`;
       }
-      form.button(label);
+      form.button(label, ach.claimed ? "textures/items/book_normal" : ach.unlocked ? "textures/items/nether_star" : "textures/items/book_writable");
       btns.push(ach.id);
     }
 
-    form.button("§6§l  ◀ Kembali");
+    form.button("§6  Kembali", "textures/items/arrow");
     btns.push("back");
 
     const res = await form.show(player);
-    if (res.canceled || btns[res.selection] === "back") return;
+    if (res.canceled) throw new UIClose();
+    if (btns[res.selection] === "back") return;
 
     const achId = btns[res.selection];
     const ach = list.find(a => a.id === achId);
@@ -444,15 +454,15 @@ async function uiAchievementList(player, catName) {
         addCoin(player, coin);
         const newAch = updateStat(player.id, "earned", coin);
         player.sendMessage(
-          `\n§a§l[Achievement]§r §a${ach.label} §fdiklaim!\n` +
-          `§8  Reward: §e+${fmt(coin)} Koin\n`
+          `\n§a[Achievement]§r §a${ach.label} §fdiklaim!\n` +
+          `§f  Reward: §e+${fmt(coin)} Koin\n`
         );
         for (const a of newAch)
-          player.sendMessage(`\n§d§l[Achievement]§r §f${a.label} §eterbuka!\n§8  Klaim di §f/lt:daily\n`);
+          player.sendMessage(`\n§d[Achievement]§r §f${a.label} §eterbuka!\n§f  Klaim di §e/lt:daily\n`);
         if (ach.target >= CFG.BROADCAST_THRESHOLD) {
           world.sendMessage(
-            `\n§6§l[Achievement]§r §e${player.name} §fmembuka §6§l${ach.label}§r\n` +
-            `§8  ${ach.desc}\n`
+            `\n§6[Achievement]§r §e${player.name} §fmembuka §6${ach.label}§r\n` +
+            `§f  ${ach.desc}\n`
           );
         }
       }

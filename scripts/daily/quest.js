@@ -1,6 +1,7 @@
-// daily/quest.js — Multi-tier quest system (daily/weekly/monthly)
+// daily/quest.js — Multi-tier quest system (daily/weekly/monthly) — Hybrid Player DP
 import { world } from "@minecraft/server";
 import { DAILY_CFG as CFG } from "./config.js";
+import { pGet, pSet } from "../player_dp.js";
 
 const MS_PER_DAY = 86400000;
 const RESET_MS = CFG.RESET_UTC_HOUR * 3600000;
@@ -34,9 +35,9 @@ const TIERS = {
 export const TIER_KEYS = ["daily", "weekly", "monthly"];
 
 export const TIER_META = {
-  daily:   { label: "Harian",   color: "§b", icon: "✎", resetLabel: "20:00 WIB" },
-  weekly:  { label: "Mingguan", color: "§3", icon: "✦", resetLabel: "Senin 20:00" },
-  monthly: { label: "Bulanan",  color: "§5", icon: "★", resetLabel: "Tgl 1, 20:00" },
+  daily:   { label: "Harian",   color: "§b", icon: "✎", resetLabel: "20:00 WIB",    texture: "textures/items/book_writable" },
+  weekly:  { label: "Mingguan", color: "§3", icon: "✦", resetLabel: "Senin 20:00",   texture: "textures/items/compass_item" },
+  monthly: { label: "Bulanan",  color: "§5", icon: "★", resetLabel: "Tgl 1, 20:00",  texture: "textures/items/map_empty" },
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -101,11 +102,20 @@ function ck(tier, pid) {
 }
 
 function readDP(tier, pid) {
+  // Coba player DP dulu (player online)
+  const p = world.getPlayers().find(pl => pl.id === pid);
+  if (p) return pGet(p, TIERS[tier].key, null);
+  // Fallback world DP (legacy)
   try { const r = world.getDynamicProperty(TIERS[tier].key + pid); return r ? JSON.parse(r) : null; }
   catch { return null; }
 }
 
 function writeDP(tier, pid, data) {
+  const p = world.getPlayers().find(pl => pl.id === pid);
+  if (p) {
+    try { pSet(p, TIERS[tier].key, data); return; } catch {}
+  }
+  // Fallback world DP
   try { world.setDynamicProperty(TIERS[tier].key + pid, JSON.stringify(data)); }
   catch (e) { console.warn(`[Quest] writeDP(${tier}):`, e); }
 }

@@ -2,6 +2,8 @@ import { world, system, CommandPermissionLevel } from "@minecraft/server";
 import { ActionFormData, MessageFormData } from "@minecraft/server-ui";
 import { CFG } from "./config.js";
 import { getTPS, getTPSColor } from "../MobuXP/monitor/tps_tracker.js";
+import { UIClose } from "../ui_close.js";
+import { pGet, pSet, getOnlinePlayer } from "../player_dp.js";
 
 
 const dp = {
@@ -51,19 +53,14 @@ const graceUntil       = new Map();
 const activeSessions   = new Set();
 const pvpActivePlayers = new Set();
 const _warnCooldown    = new Map();
+const illegalOffenses  = new Map();
 
-// ─── In-memory caches — avoid DP reads every HUD tick ───────
-const combatStatsCache = new Map();  // pid → stats object (mutable ref)
-const combatStatsDirty = new Set();  // pids with unsaved stat changes
-const hudModeCache     = new Map();  // pid → "actionbar" | "sidebar"
-const hudOnCache       = new Map();  // pid → boolean
-const sidebarCmdTick   = new Map();  // pid → last tick setdisplay was called
-const sidebarPrevLines = new Map();  // pid → Map<name, score> for smart diff
-// Kill log — lazy-loaded, batch-written
-let killLogCache = null;             // null = not yet loaded from DP
+const combatStatsCache = new Map();
+const combatStatsDirty = new Set();
+const hudOnCache       = new Map();
+let killLogCache = null;
 let killLogDirty = false;
 
-// ─── TPS Display — uses shared tps_tracker.js (no duplicate interval) ──
 function getTpsDisplay() {
   const t = getTPS();
   return `${getTPSColor(t)}${t.toFixed(1)}`;
@@ -102,9 +99,9 @@ function isInProtectedLand(player) {
 
 function getStats(pid) {
   if (combatStatsCache.has(pid)) return combatStatsCache.get(pid);
-  const v = dp.get(CFG.K_STATS + pid, {
-    kills: 0, deaths: 0, earned: 0, lost: 0, streak: 0, bestStreak: 0, lastKillTs: 0,
-  });
+  const def = { kills: 0, deaths: 0, earned: 0, lost: 0, streak: 0, bestStreak: 0, lastKillTs: 0 };
+  const p = getOnlinePlayer(pid);
+  const v = p ? pGet(p, CFG.K_STATS, def) : dp.get(CFG.K_STATS + pid, def);
   combatStatsCache.set(pid, v);
   return v;
 }
@@ -124,27 +121,20 @@ function pushKillLog(kn, vn, amt) {
   killLogDirty = true;
 }
 
-// ═══════════════════════════════════════════════════════════
-// HUD HELPERS — per-player display preference
-// ═══════════════════════════════════════════════════════════
-function getHudMode(pid) {
-  if (hudModeCache.has(pid)) return hudModeCache.get(pid);
-  const v = dp.get(CFG.K_HUD_MODE + pid, CFG.DEFAULT_HUD_MODE);
-  hudModeCache.set(pid, v);
-  return v;
-}
-function setHudMode(pid, m) { hudModeCache.set(pid, m); dp.set(CFG.K_HUD_MODE + pid, m); }
 function isHudOn(pid) {
   if (hudOnCache.has(pid)) return hudOnCache.get(pid);
-  const v = dp.get(CFG.K_HUD_ENABLED + pid, true);
+  const p = getOnlinePlayer(pid);
+  const v = p ? pGet(p, CFG.K_HUD_ENABLED, true) : dp.get(CFG.K_HUD_ENABLED + pid, true);
   hudOnCache.set(pid, v);
   return v;
 }
-function setHudOn(pid, v) { hudOnCache.set(pid, v); dp.set(CFG.K_HUD_ENABLED + pid, v); }
+function setHudOn(pid, v) {
+  hudOnCache.set(pid, v);
+  const p = getOnlinePlayer(pid);
+  if (p) pSet(p, CFG.K_HUD_ENABLED, v);
+  else dp.set(CFG.K_HUD_ENABLED + pid, v);
+}
 
-// ═══════════════════════════════════════════════════════════
-// PLAYER STATUS — live info untuk UI
-// ═══════════════════════════════════════════════════════════
 function getPlayerStatus(player) {
   let hp = 20, maxHp = 20, armor = 0, weapon = "Tangan Kosong";
   try {
@@ -156,7 +146,6 @@ function getPlayerStatus(player) {
     if (inv) {
       const held = inv.getItem(player.selectedSlotIndex);
       if (held) weapon = held.typeId.replace("minecraft:", "").replace(/_/g, " ");
-      // Armor score
       const eq = player.getComponent("minecraft:equippable");
       if (eq) {
         const slots = ["Head", "Chest", "Legs", "Feet"];
@@ -233,7 +222,7 @@ function togglePvP(player) {
     pvpActivePlayers.add(player.id);
     graceUntil.set(player.id, now + CFG.SAFE_TICKS);
     sfx(player, SFX.TOGGLE_ON);
-    player.sendMessage(`§a[PvP] §c§lPvP AKTIF!\n§7Grace: §f5 detik\n§c⚠ Bisa diserang setelah grace habis!`);
+    player.sendMessage(`§a[PvP] §cPvP AKTIF!\n§7Grace: §f5 detik\n§c⚠ Bisa diserang setelah grace habis!`);
     return "on";
   }
 }
@@ -251,10 +240,8 @@ async function showPvPMenu(player) {
       const kd    = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(2) : stats.kills.toFixed(0);
       const st    = getPlayerStatus(player);
       const hudOn = isHudOn(player.id);
-      const hudM  = getHudMode(player.id);
       const mult  = getStreakMult(stats.streak);
 
-      // Nearby enemies count
       let nearbyEnemies = 0;
       try {
         for (const p of world.getPlayers()) {
@@ -267,16 +254,14 @@ async function showPvPMenu(player) {
       } catch {}
 
       let body = `${CFG.HR}\n`;
-      body += `§c§l  C O M B A T   P v P\n`;
+      body += `§c  C O M B A T   P v P\n`;
       body += `${CFG.HR}\n\n`;
 
-      // Status badge
-      body += `  §eStatus §8── ${isOn ? "§c§lAKTIF \u2694" : "§a§lNONAKTIF \u2714"}\n`;
-      if (st.inCombat) body += `  §c§l  \u26a0 DALAM PERTARUNGAN!\n`;
-      if (st.isGrace)  body += `  §e§l  \u26a1 GRACE PERIOD\n`;
+      body += `  §eStatus §8── ${isOn ? "§cAKTIF \u2694" : "§aNONAKTIF \u2714"}\n`;
+      if (st.inCombat) body += `  §c  \u26a0 DALAM PERTARUNGAN!\n`;
+      if (st.isGrace)  body += `  §e  \u26a1 GRACE PERIOD\n`;
       body += `\n`;
 
-      // Player Status
       body += `  §6\u2726 §eStatus Player\n`;
       body += `${CFG.HR_THIN}\n`;
       body += `  §8\u251c §cHP     §8\u2500\u2500 ${progressBar(st.hp, st.maxHp, 8)} §f${Math.floor(st.hp)}§8/${Math.floor(st.maxHp)}\n`;
@@ -284,7 +269,6 @@ async function showPvPMenu(player) {
       body += `  §8\u251c §fSenjata§8\u2500\u2500 §f${st.weapon}\n`;
       body += `  §8\u2514 §e\u26c3 Koin  §8\u2500\u2500 §e${fmt(coin)}\n\n`;
 
-      // Combat Stats
       body += `  §c\u2694 §eStatistik\n`;
       body += `${CFG.HR_THIN}\n`;
       body += `  §8\u251c §7K/D    §8\u2500\u2500 §f${stats.kills}§7/§f${stats.deaths} §8(§e${kd}§8)\n`;
@@ -293,45 +277,44 @@ async function showPvPMenu(player) {
       body += `  §8\u251c §aDapat  §8\u2500\u2500 §a+${fmt(stats.earned)} \u26c3\n`;
       body += `  §8\u2514 §cHilang §8\u2500\u2500 §c-${fmt(stats.lost)} \u26c3\n\n`;
 
-      // Combat Info
       body += `  §e\u26a1 §eInfo\n`;
       body += `${CFG.HR_THIN}\n`;
       body += `  §8\u251c §7Musuh  §8\u2500\u2500 ${nearbyEnemies > 0 ? `§c${nearbyEnemies} nearby` : `§a0 aman`}\n`;
-      body += `  §8\u251c §7HUD    §8\u2500\u2500 ${hudOn ? `§a${hudM === "sidebar" ? "Sidebar" : "Actionbar"}` : "§cOFF"}\n`;
+      body += `  §8\u251c §7HUD    §8\u2500\u2500 ${hudOn ? "§aON" : "§cOFF"}\n`;
       body += `  §8\u2514 §7Min \u26c3  §8\u2500\u2500 §e${fmt(CFG.MIN_COIN_TO_ENABLE)}\n`;
       body += `\n${CFG.HR}`;
 
       const btns = [];
       const form = new ActionFormData()
-        .title("§l§8 \u2694 §cCOMBAT PvP§r§l §8\u2694 §r")
+        .title("§8 \u2694 §cCOMBAT PvP§r §8\u2694 §r")
         .body(body);
 
-      // Toggle button
       if (isOn) {
         const canOff = !st.inCombat;
         form.button(canOff
-          ? "§c§l  \u2694 Nonaktifkan PvP\n§r  §8Matikan mode bertarung"
-          : "§4§l  \u2694 PvP (Dalam Pertarungan)\n§r  §8Tunggu combat tag habis");
+          ? "§c  Nonaktifkan PvP\n§r  §8Matikan mode bertarung"
+          : "§4  PvP (Dalam Pertarungan)\n§r  §8Tunggu combat tag habis", "textures/items/iron_sword");
       } else {
         const canOn = coin >= CFG.MIN_COIN_TO_ENABLE;
         form.button(canOn
-          ? "§a§l  \u2694 Aktifkan PvP\n§r  §8Siap bertarung!"
-          : `§8§l  \u2694 Koin Kurang (${fmt(CFG.MIN_COIN_TO_ENABLE)} \u26c3)\n§r  §8Tidak bisa aktifkan`);
+          ? "§a  Aktifkan PvP\n§r  §8Siap bertarung!"
+          : `§8  Koin Kurang (${fmt(CFG.MIN_COIN_TO_ENABLE)} ⛃)\n§r  §8Tidak bisa aktifkan`, "textures/items/iron_sword");
       }
       btns.push("toggle");
 
-      form.button("§f§l  \u25c6 Kill Log\n§r  §8Riwayat pertarungan");
+      form.button("§f  Kill Log\n§r  §8Riwayat pertarungan", "textures/items/book_writable");
       btns.push("log");
-      form.button("§e§l  \u2726 Leaderboard\n§r  §8Top killer");
+      form.button("§e  Leaderboard\n§r  §8Top killer", "textures/items/diamond");
       btns.push("lb");
-      form.button("§b§l  \u2699 Pengaturan HUD\n§r  §8Tampilan stats & mode");
+      form.button("§b  Pengaturan HUD\n§r  §8Toggle actionbar stats", "textures/items/compass_item");
       btns.push("settings");
-      form.button("§8§l  Tutup");
+      form.button("§8  Tutup", "textures/items/redstone_dust");
       btns.push("close");
 
       sfx(player, SFX.MENU);
       const res = await form.show(player);
-      if (res.canceled || btns[res.selection] === "close") return;
+      if (res.canceled) throw new UIClose();
+      if (btns[res.selection] === "close") return;
 
       switch (btns[res.selection]) {
         case "toggle": await confirmToggle(player); break;
@@ -340,7 +323,8 @@ async function showPvPMenu(player) {
         case "settings": await showSettings(player); break;
       }
     }
-  } finally {
+  } catch (e) { if (!e?.isUIClose) throw e; }
+  finally {
     activeSessions.delete(player.id);
   }
 }
@@ -353,7 +337,6 @@ async function confirmToggle(player) {
     return;
   }
 
-  // Coin check
   const coin = getCoin(player);
   if (coin < CFG.MIN_COIN_TO_ENABLE) {
     player.sendMessage(
@@ -365,11 +348,11 @@ async function confirmToggle(player) {
     return;
   }
 
-  const confirm = await new MessageFormData()
-    .title("§l§c  \u26a0 Aktifkan PvP?  §r")
+  const confirm = await new ActionFormData()
+    .title("§c  \u26a0 Aktifkan PvP?  §r")
     .body(
       `${CFG.HR}\n` +
-      `§c§l\u26a0 PERINGATAN\n\n` +
+      `§c\u26a0 PERINGATAN\n\n` +
       `§fDengan mengaktifkan PvP:\n\n` +
       `§7\u2022 Player PvP lain §cbisa membunuhmu\n` +
       `§7\u2022 Mati = §ckehilangan koin §7(${CFG.KILL_REWARD_PCT}% saldo)\n` +
@@ -380,92 +363,52 @@ async function confirmToggle(player) {
       `§eApakah kamu yakin?\n` +
       `${CFG.HR}`
     )
-    .button1("§f Batal")
-    .button2("§c \u2694 Ya, Aktifkan!")
+    .button("§c  Ya, Aktifkan!\n§r  §8Mulai mode PvP", "textures/items/iron_sword")
+    .button("§f  Batal\n§r  §8Kembali ke menu", "textures/items/arrow")
     .show(player);
 
-  if (confirm.canceled || confirm.selection !== 1) return;
+  if (confirm.canceled || confirm.selection !== 0) return;
   togglePvP(player);
 }
 
-// ═══════════════════════════════════════════════════════════
-// SETTINGS UI — HUD mode & toggle
-// ═══════════════════════════════════════════════════════════
 async function showSettings(player) {
-  const curMode = getHudMode(player.id);
-  const curOn   = isHudOn(player.id);
-  const coin    = getCoin(player);
+  const curOn = isHudOn(player.id);
+  const coin  = getCoin(player);
 
   let body = `${CFG.HR}\n`;
-  body += `§b§l  \u2699 P E N G A T U R A N\n`;
+  body += `§b  \u2699 P E N G A T U R A N\n`;
   body += `${CFG.HR}\n\n`;
-  body += `  §e\u2726 §eHUD Combat Stats\n`;
+  body += `  §e\u2726 §eHUD Combat Stats (Actionbar)\n`;
   body += `${CFG.HR_THIN}\n`;
   body += `  §8\u251c §7Status  §8\u2500\u2500 ${curOn ? "§aAKTIF" : "§cNONAKTIF"}\n`;
-  body += `  §8\u251c §7Mode    §8\u2500\u2500 §f${curMode === "sidebar" ? "Sidebar (Kanan)" : "Actionbar (Bawah)"}\n`;
   body += `  §8\u251c §e\u26c3 Koin  §8\u2500\u2500 §e${fmt(coin)} §8(Min: §e${fmt(CFG.MIN_COIN_TO_ENABLE)}§8)\n\n`;
-  body += `  §8\u2514 §8Info:\n`;
-  body += `    §8Actionbar §8= stats di bawah layar\n`;
-  body += `    §8Sidebar   §8= papan skor di kanan\n`;
+  body += `  §8\u2514 §8Stats tampil di bawah layar saat PvP aktif.\n`;
   body += `\n${CFG.HR}`;
 
   const form = new ActionFormData()
-    .title("§l§8 \u2699 §bSETTINGS §8\u2699 §r")
+    .title("§8 \u2699 §bSETTINGS §8\u2699 §r")
     .body(body);
 
-  const btns = [];
   form.button(curOn
-    ? "§c§l  Matikan HUD Stats\n§r  §8Sembunyikan stats"
-    : "§a§l  Aktifkan HUD Stats\n§r  §8Tampilkan stats saat PvP");
-  btns.push("toggle_hud");
+    ? "§c  Matikan HUD Stats\n§r  §8Sembunyikan actionbar stats"
+    : "§a  Aktifkan HUD Stats\n§r  §8Tampilkan stats di actionbar", "textures/items/compass_item");
 
-  form.button(curMode === "actionbar"
-    ? "§e§l  Mode: Sidebar\n§r  §8Pindah ke papan skor kanan"
-    : "§e§l  Mode: Actionbar\n§r  §8Pindah ke teks bawah layar");
-  btns.push("switch_mode");
-
-  form.button("§6§l  \u25c0 Kembali");
-  btns.push("back");
+  form.button("§6  Kembali", "textures/items/arrow");
 
   const res = await form.show(player);
-  if (res.canceled || btns[res.selection] === "back") return;
+  if (res.canceled || res.selection === 1) return;
 
-  if (btns[res.selection] === "toggle_hud") {
+  if (res.selection === 0) {
     const newVal = !curOn;
     setHudOn(player.id, newVal);
     sfx(player, newVal ? SFX.TOGGLE_ON : SFX.TOGGLE_OFF);
     player.sendMessage(`§b[\u2699] HUD Stats: ${newVal ? "§aAKTIF" : "§cNONAKTIF"}`);
-    if (!newVal) {
-      // Clear sidebar scoreboard when HUD is turned off
-      try {
-        const objId = getSidebarObjId(player);
-        const obj = world.scoreboard.getObjective(objId);
-        if (obj) world.scoreboard.removeObjective(obj);
-      } catch {}
-      sidebarCmdTick.delete(player.id);
-      sidebarPrevLines.delete(player.id);
-    }
-  } else if (btns[res.selection] === "switch_mode") {
-    const newMode = curMode === "actionbar" ? "sidebar" : "actionbar";
-    setHudMode(player.id, newMode);
-    sfx(player, SFX.MENU);
-    player.sendMessage(`§b[\u2699] Mode HUD: §f${newMode === "sidebar" ? "Sidebar (Kanan)" : "Actionbar (Bawah)"}`);
-    // Clean up sidebar scoreboard when switching away from sidebar mode
-    if (newMode === "actionbar") {
-      try {
-        const objId = getSidebarObjId(player);
-        const obj = world.scoreboard.getObjective(objId);
-        if (obj) world.scoreboard.removeObjective(obj);
-      } catch {}
-      sidebarCmdTick.delete(player.id);
-      sidebarPrevLines.delete(player.id);
-    }
   }
 }
 
 async function showKillLog(player) {
   const log = getKillLog();
-  let body = `${CFG.HR}\n§c§l  KILL LOG\n${CFG.HR}\n\n`;
+  let body = `${CFG.HR}\n§c  KILL LOG\n${CFG.HR}\n\n`;
 
   if (!log.length) {
     body += "§8 Belum ada pertarungan tercatat.\n";
@@ -480,9 +423,9 @@ async function showKillLog(player) {
 
   body += `\n${CFG.HR}`;
   await new ActionFormData()
-    .title("§l§8 \u2694 §fKILL LOG §8\u2694 §r")
+    .title("§8 \u2694 §fKILL LOG §8\u2694 §r")
     .body(body)
-    .button("§6§l  \u25c0 Kembali")
+    .button("§6  Kembali", "textures/items/arrow")
     .show(player);
 }
 
@@ -506,7 +449,7 @@ async function showLeaderboard(player) {
   const entries = dp.get("c:lb", []);
   const medals = ["\u00a76\u00a7l1.", "\u00a7f\u00a7l2.", "\u00a7e\u00a7l3."];
 
-  let body = `${CFG.HR}\n§c§l  TOP KILLER\n${CFG.HR}\n\n`;
+  let body = `${CFG.HR}\n§c  TOP KILLER\n${CFG.HR}\n\n`;
   if (!entries.length) {
     body += "§8 Belum ada data.\n";
   } else {
@@ -519,9 +462,9 @@ async function showLeaderboard(player) {
 
   body += `\n${CFG.HR}`;
   await new ActionFormData()
-    .title("§l§8 \u2726 §eTOP KILLER §8\u2726 §r")
+    .title("§8 \u2726 §eTOP KILLER §8\u2726 §r")
     .body(body)
-    .button("§6§l  \u25c0 Kembali")
+    .button("§6  Kembali", "textures/items/arrow")
     .show(player);
 }
 
@@ -591,8 +534,66 @@ world.afterEvents.entityDie.subscribe(ev => {
   const attacker = ev.damageSource?.damagingEntity;
   if (!victim || !attacker) return;
   if (victim.typeId !== "minecraft:player" || attacker.typeId !== "minecraft:player") return;
-  if (!isPvPOn(attacker) && !pvpActivePlayers.has(attacker.id)) return;
-  if (!pvpActivePlayers.has(victim.id)) return;
+
+  const atkPvP = isPvPOn(attacker) || pvpActivePlayers.has(attacker.id);
+  const vicPvP = pvpActivePlayers.has(victim.id);
+
+  if (!atkPvP || !vicPvP) {
+    const now = Date.now();
+    const atkId = attacker.id;
+
+    const history = illegalOffenses.get(atkId) ?? [];
+    const recent = history.filter(t => now - t < CFG.ILLEGAL_KILL_WINDOW_MS);
+    recent.push(now);
+    illegalOffenses.set(atkId, recent);
+
+    const atkCoin = getCoin(attacker);
+    let penalty = Math.floor(atkCoin * CFG.ILLEGAL_KILL_PENALTY_PCT / 100);
+    penalty = Math.min(penalty, CFG.ILLEGAL_KILL_MAX_PENALTY);
+    penalty = Math.max(penalty, 50);
+    penalty = Math.min(penalty, atkCoin);
+    if (penalty > 0) setCoin(attacker, atkCoin - penalty);
+
+    const offenseCount = recent.length;
+
+    system.run(() => {
+      sfx(attacker, SFX.DEATH);
+      if (!atkPvP) {
+        attacker.sendMessage(
+          `§4[PvP] ⚠ PELANGGARAN!\n` +
+          `§cKamu membunuh §f${victim.name} §ctanpa PvP aktif!\n` +
+          `§c  Denda: §e-${fmt(penalty)} ⛃\n` +
+          `§c  Pelanggaran: §f${offenseCount}/${CFG.ILLEGAL_KILL_KICK_THRESHOLD}\n` +
+          `§7  Saldo: §e${fmt(getCoin(attacker))} ⛃`
+        );
+      } else {
+        attacker.sendMessage(
+          `§4[PvP] ⚠ PELANGGARAN!\n` +
+          `§cKamu membunuh §f${victim.name} §cyang PvP-nya nonaktif!\n` +
+          `§c  Denda: §e-${fmt(penalty)} ⛃\n` +
+          `§c  Pelanggaran: §f${offenseCount}/${CFG.ILLEGAL_KILL_KICK_THRESHOLD}\n` +
+          `§7  Saldo: §e${fmt(getCoin(attacker))} ⛃`
+        );
+      }
+      victim.sendMessage(
+        `§e[PvP] §f${attacker.name} §cmembunuhmu secara ilegal!\n` +
+        `§a  Pelaku telah didenda §e${fmt(penalty)} ⛃\n` +
+        `§7  Koinmu tidak terpengaruh.`
+      );
+      world.sendMessage(
+        `§4[PvP] §f${attacker.name} §cmembunuh §f${victim.name} §csecara ilegal! Denda: §e${fmt(penalty)} ⛃`
+      );
+
+      if (offenseCount >= CFG.ILLEGAL_KILL_KICK_THRESHOLD) {
+        illegalOffenses.delete(atkId);
+        attacker.sendMessage(`§4[PvP] §cDikick karena pelanggaran berulang!`);
+        system.runTimeout(() => {
+          try { attacker.runCommandAsync(`kick "${attacker.name}" §cDikick: membunuh player non-PvP berulang kali`); } catch {}
+        }, 40);
+      }
+    });
+    return;
+  }
 
   const now = Date.now();
   const pairKey = `${attacker.id}:${victim.id}`;
@@ -607,7 +608,6 @@ world.afterEvents.entityDie.subscribe(ev => {
   killCooldown.set(pairKey, now);
   globalKillCD.set(attacker.id, now);
 
-  // Single cache lookup — also serves as reward multiplier source
   const atkStats = getStats(attacker.id);
   const prevStreak = (now - (atkStats.lastKillTs || 0) > CFG.STREAK_DECAY_MS) ? 0 : atkStats.streak;
 
@@ -623,7 +623,7 @@ world.afterEvents.entityDie.subscribe(ev => {
     setCoin(attacker, getCoin(attacker) + actualGain);
   }
 
-  atkStats.streak = prevStreak;  // apply decay before incrementing
+  atkStats.streak = prevStreak;
   atkStats.kills++;
   atkStats.earned += actualGain;
   atkStats.streak++;
@@ -640,13 +640,13 @@ world.afterEvents.entityDie.subscribe(ev => {
   pushKillLog(attacker.name, victim.name, actualGain);
   updateLeaderboard(attacker.name, attacker.id);
   updateLeaderboard(victim.name, victim.id);
-  const streakBonus = atkStats.streak >= 3 ? ` §6§l(${atkStats.streak}x STREAK!)` : "";
+  const streakBonus = atkStats.streak >= 3 ? ` §6(${atkStats.streak}x STREAK!)` : "";
 
   system.run(() => {
     sfx(attacker, SFX.KILL);
-    attacker.sendMessage(`§a[PvP] §c\u2694 §fKamu membunuh §c${victim.name}!\n§a  +${fmt(actualGain)} \u26c3${streakBonus}\n§7  Saldo: §e${fmt(getCoin(attacker))} \u26c3`);
+    attacker.sendMessage(`§a[PvP] §c⚔ §fKamu membunuh §c${victim.name}!\n§a  +${fmt(actualGain)} ⛃${streakBonus}\n§7  Saldo: §e${fmt(getCoin(attacker))} ⛃`);
     if (atkStats.streak >= 3) {
-      world.sendMessage(`§c[PvP] §f${attacker.name} §c\u2694 §f${victim.name} §e(${fmt(actualGain)}\u26c3)${streakBonus}`);
+      world.sendMessage(`§c[PvP] §f${attacker.name} §c⚔ §f${victim.name} §e(${fmt(actualGain)}⛃)${streakBonus}`);
     }
   });
 
@@ -675,132 +675,30 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
   }, 20);
 });
 
-// ═══════════════════════════════════════════════════════════
-// SIDEBAR HELPERS — collision-safe ID, smart diff update
-// ═══════════════════════════════════════════════════════════
-function getSidebarObjId(player) {
-  // Use player ID hash to avoid name collision
-  // player.id is unique (e.g. "-12345678901"), take last 12 chars
-  const idStr = String(player.id).replace(/[^a-zA-Z0-9]/g, "");
-  return "pvp" + idStr.substring(0, 14);
-}
-
-/**
- * Smart-diff sidebar update: only add/remove changed lines.
- * Prevents flicker from full clear+rebuild every tick.
- */
-function updateSidebarSmart(player, obj, newLines) {
-  const pid = player.id;
-  const prev = sidebarPrevLines.get(pid) ?? new Map();
-  const next = new Map(Object.entries(newLines));
-
-  // Remove lines no longer present
-  for (const [name] of prev) {
-    if (!next.has(name)) {
-      try { obj.removeParticipant(name); } catch {}
-    }
-  }
-
-  // Add/update lines with changed scores
-  for (const [name, score] of next) {
-    if (prev.get(name) !== score) {
-      try { obj.setScore(name, score); } catch {}
-    }
-  }
-
-  sidebarPrevLines.set(pid, next);
-}
-
-// ═══════════════════════════════════════════════════════════
-// HUD LOOP — premium sidebar + actionbar
-// [PERF] Only loops online players, skips non-PvP early
-// [FIX] Smart diff sidebar — no flicker
-// ═══════════════════════════════════════════════════════════
 system.runInterval(() => {
   for (const player of world.getPlayers()) {
     if (!isPvPOn(player)) continue;
     if (!isHudOn(player.id)) continue;
-    const now   = system.currentTick;
-    const grace = (graceUntil.get(player.id) ?? 0) > now;
+    const now    = system.currentTick;
+    const grace  = (graceUntil.get(player.id) ?? 0) > now;
     const combat = (combatTagUntil.get(player.id) ?? 0) > now;
-    const stats = getStats(player.id);
-    const mode  = getHudMode(player.id);
-    const mult  = getStreakMult(stats.streak);
-    const kd = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(1) : stats.kills.toString();
-    const coin = getCoin(player);
+    const stats  = getStats(player.id);
+    const mult   = getStreakMult(stats.streak);
+    const kd     = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(1) : stats.kills.toString();
+    const coin   = getCoin(player);
 
-    if (mode === "sidebar") {
-      try {
-        const objId = getSidebarObjId(player);
-        let obj = world.scoreboard.getObjective(objId);
-        if (!obj) {
-          obj = world.scoreboard.addObjective(objId, "§c§l ⚔ COMBAT PvP");
-        }
-
-        // Build premium sidebar lines (score = display order, higher = top)
-        const lines = {};
-        let row = 15;
-
-        // ── Status Badge ──
-        if (combat) {
-          const ctRemain = Math.ceil(((combatTagUntil.get(player.id) ?? 0) - now) / 20);
-          lines[`§c§l⚠ COMBAT §f${ctRemain}s`] = row--;
-        } else if (grace) {
-          const grRemain = Math.ceil(((graceUntil.get(player.id) ?? 0) - now) / 20);
-          lines[`§e§l⚡ GRACE §f${grRemain}s`] = row--;
-        } else {
-          lines["§a§l✔ READY"] = row--;
-        }
-
-        lines["§8─────────"] = row--;  // separator
-
-        // ── Stats Section ──
-        lines[`§c⚔ §fKills: §e${stats.kills}`] = row--;
-        lines[`§7☠ §fDeaths: §7${stats.deaths}`] = row--;
-        lines[`§6◆ §fK/D: §e${kd}`] = row--;
-
-        lines["§8── ── ──"] = row--;  // separator
-
-        // ── Streak & Multiplier ──
-        if (stats.streak >= 3) {
-          lines[`§6§l🔥 §e${stats.streak}x STREAK`] = row--;
-        } else {
-          lines[`§7⟐ §fStreak: §f${stats.streak}`] = row--;
-        }
-        lines[`§e✦ §fMulti: §6${mult}x`] = row--;
-
-        lines["§8─ ─ ─ ─ ─"] = row--;  // separator
-
-        // ── Economy ──
-        lines[`§e⛃ §f${fmt(coin)}`] = row--;
-
-        // ── Server ──
-        lines[`§8TPS: ${getTpsDisplay()}`] = row--;
-
-        // Smart diff update — no flicker!
-        updateSidebarSmart(player, obj, lines);
-
-        // setdisplay command is persistent — only call every ~200 ticks (~10s)
-        const lastCmd = sidebarCmdTick.get(player.id) ?? 0;
-        if (now - lastCmd >= 200) {
-          try { player.runCommand(`scoreboard objectives setdisplay sidebar ${objId}`); } catch {}
-          sidebarCmdTick.set(player.id, now);
-        }
-      } catch {}
+    let bar;
+    if (grace) {
+      const r = Math.ceil(((graceUntil.get(player.id) ?? 0) - now) / 20);
+      bar = `§e⚔ PvP §8│ §6⚡Grace:${r}s §8│ §fK:§e${stats.kills} §fD:§7${stats.deaths} §8│ §e⛃§f${fmt(coin)} §8│ §8TPS:${getTpsDisplay()}`;
+    } else if (combat) {
+      const r = Math.ceil(((combatTagUntil.get(player.id) ?? 0) - now) / 20);
+      bar = `§c⚔ COMBAT §4${r}s §8│ §fK:§e${stats.kills} §fD:§7${stats.deaths} §8│ §e⛃§f${fmt(coin)} §8│ §8TPS:${getTpsDisplay()}`;
     } else {
-      let bar;
-      if (grace) {
-        const r = Math.ceil(((graceUntil.get(player.id) ?? 0) - now) / 20);
-        bar = `§e⚔ PvP §8│ §6⚡Grace:${r}s §8│ §fK:§e${stats.kills} §fD:§7${stats.deaths} §8│ §e⛃§f${fmt(coin)} §8│ §8TPS:${getTpsDisplay()}`;
-      } else if (combat) {
-        const r = Math.ceil(((combatTagUntil.get(player.id) ?? 0) - now) / 20);
-        bar = `§c⚔ COMBAT §4${r}s §8│ §fK:§e${stats.kills} §fD:§7${stats.deaths} §8│ §e⛃§f${fmt(coin)} §8│ §8TPS:${getTpsDisplay()}`;
-      } else {
-        const sk = stats.streak >= 3 ? ` §6🔥${stats.streak}x` : "";
-        bar = `§a⚔ PvP §8│ §fK:§e${stats.kills} §fD:§7${stats.deaths}${sk} §8│ §e⛃§f${fmt(coin)} §8│ §8TPS:${getTpsDisplay()}`;
-      }
-      try { player.onScreenDisplay.setActionBar(bar); } catch {}
+      const sk = stats.streak >= 3 ? ` §6🔥${stats.streak}x` : "";
+      bar = `§a⚔ PvP §8│ §fK:§e${stats.kills} §fD:§7${stats.deaths}${sk} §8│ §e⛃§f${fmt(coin)} §8│ §8TPS:${getTpsDisplay()}`;
     }
+    try { player.onScreenDisplay.setActionBar(bar); } catch {}
   }
 }, CFG.HUD_INT);
 
@@ -809,13 +707,20 @@ system.runInterval(() => {
   for (const [k, v] of killCooldown) { if (now - v > CFG.KILL_CD_MS * 2) killCooldown.delete(k); }
   for (const [k, v] of globalKillCD) { if (now - v > CFG.GLOBAL_KILL_CD_MS * 2) globalKillCD.delete(k); }
   for (const [k, v] of _warnCooldown) { if (now - v > 10000) _warnCooldown.delete(k); }
+  for (const [k, arr] of illegalOffenses) {
+    const fresh = arr.filter(t => now - t < CFG.ILLEGAL_KILL_WINDOW_MS);
+    if (fresh.length === 0) illegalOffenses.delete(k);
+    else illegalOffenses.set(k, fresh);
+  }
 }, 6000);
 
-// Flush combat stats + kill log to DP every ~10 seconds
 system.runInterval(() => {
   for (const pid of combatStatsDirty) {
     const s = combatStatsCache.get(pid);
-    if (s) dp.set(CFG.K_STATS + pid, s);
+    if (!s) continue;
+    const p = getOnlinePlayer(pid);
+    if (p) pSet(p, CFG.K_STATS, s);
+    else dp.set(CFG.K_STATS + pid, s);
   }
   combatStatsDirty.clear();
   if (killLogDirty && killLogCache !== null) {
@@ -853,7 +758,7 @@ system.beforeEvents.startup.subscribe(init => {
         return { status: 0 };
       }
     );
-    console.log("[Combat] /pvp /pvpon /pvpoff registered.");
+
   } catch (e) { console.warn("[Combat] Command registration failed:", e); }
 });
 
@@ -904,17 +809,13 @@ world.afterEvents.playerLeave.subscribe(({ playerId }) => {
       }
     } catch {}
   }
-  // Flush dirty stats before evicting from cache
   if (combatStatsDirty.has(playerId)) {
     const s = combatStatsCache.get(playerId);
     if (s) dp.set(CFG.K_STATS + playerId, s);
     combatStatsDirty.delete(playerId);
   }
   combatStatsCache.delete(playerId);
-  hudModeCache.delete(playerId);
   hudOnCache.delete(playerId);
-  sidebarCmdTick.delete(playerId);
-  sidebarPrevLines.delete(playerId);
 
   toggleCooldown.delete(playerId);
   graceUntil.delete(playerId);
@@ -928,13 +829,5 @@ world.afterEvents.playerLeave.subscribe(({ playerId }) => {
   for (const key of _warnCooldown.keys()) {
     if (key.includes(playerId)) _warnCooldown.delete(key);
   }
-  // Clean sidebar scoreboard — use hashed ID matching getSidebarObjId
-  try {
-    const idStr = String(playerId).replace(/[^a-zA-Z0-9]/g, "");
-    const objId = "pvp" + idStr.substring(0, 14);
-    const obj = world.scoreboard.getObjective(objId);
-    if (obj) world.scoreboard.removeObjective(obj);
-  } catch {}
+  illegalOffenses.delete(playerId);
 });
-
-console.log("[Combat] PvP system loaded");

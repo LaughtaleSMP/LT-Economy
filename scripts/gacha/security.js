@@ -211,14 +211,28 @@ export function initSecurity(mkItemFn, getDimFn, registerDropGuardFn) {
         // Setelah clear, lanjut ke restore snapshot di bawah
       }
 
-      // Pulihkan konten chest ke snapshot idle
+      // Pulihkan konten chest ke state animasi saat ini
+      // [FIX DIAM] Gunakan chestExpected (in-memory, selalu up-to-date per frame animasi)
+      // bukan loadChestSnapshot (DP, bisa 25 frame lama) → mencegah slot nyangkut di state lama
       try {
         const dim = getDimFn(c.dimId);
         const block = dim.getBlock({ x: c.x, y: c.y, z: c.z });
         if (block?.typeId !== "minecraft:chest") continue;
         const container = block.getComponent("minecraft:inventory")?.container;
         if (!container) continue;
-        restoreChestFromSnapshot(container, c.key, mkItemFn);
+        const exp = chestExpected.get(c.key);
+        if (exp) {
+          // In-memory state: selalu sinkron dengan frame animasi terakhir
+          for (let slot = 0; slot < 27; slot++) {
+            const e = exp[slot]; if (!e) continue;
+            const actual = container.getItem(slot);
+            if (!actual || actual.typeId !== e.typeId || actual.nameTag !== e.nameTag)
+              container.setItem(slot, mkItemFn(e.typeId, e.nameTag.replace(MARK, "")));
+          }
+        } else {
+          // Fallback ke DP snapshot jika belum ada in-memory (misal setelah restart)
+          restoreChestFromSnapshot(container, c.key, mkItemFn);
+        }
       } catch { }
     }
 
@@ -316,31 +330,20 @@ export function registerSecureChestHandler(
       }
     }
 
-    // ── Lanjutkan logika trigger (Amethyst Shard) ─────────
+    // ── Lanjutkan logika interaksi ─────────────────────────
     const holdingTrigger = player.getComponent("minecraft:equippable")
       ?.getEquipment("Mainhand")?.typeId === CFG.TRIGGER;
 
-    if (!holdingTrigger) {
-      // Notif hanya jika ini chest gacha terdaftar (bukan chest biasa)
-      if (isRegistered) {
-        system.run(() => player.sendMessage(
-          `§6[Gacha] §ePegang §f${CFG.TRIGGER.replace("minecraft:", "").replace(/_/g, " ")} §euntuk membuka chest gacha!`
-        ));
-      }
-      return;
-    }
-
-    // ── Bukan kandidat chest gacha ──────────────────────
+    // ── Bukan kandidat chest gacha (blok di bawah bukan amethyst/crying obs) ──
     if (!isChestCandidateFn(block)) {
-      system.run(() => player.sendMessage(
-        "§c[!] Bukan chest gacha!\n§7Chest harus di atas §5Amethyst Block §7(PT) atau §cCrying Obsidian §7(EQ)"
-      ));
+      // Chest biasa, bukan gacha
       return;
     }
 
-    // ── Belum terdaftar → admin bisa daftarkan ──────────
+    // ── Belum terdaftar → blokir akses, admin bisa daftarkan (dengan trigger item) ──
     if (!isRegistered) {
-      if (player.hasTag(CFG.ADMIN_TAG)) {
+      event.cancel = true;
+      if (holdingTrigger && player.hasTag(CFG.ADMIN_TAG)) {
         if (activePlayers.has(player.id)) {
           system.run(() => player.sendMessage("§e[Gacha] Selesaikan sesi yang aktif dulu!"));
           return;
@@ -353,15 +356,17 @@ export function registerSecureChestHandler(
         });
       } else {
         system.run(() => player.sendMessage(
-          "§e[!] Chest ini belum terdaftar.\n§7Minta admin untuk mendaftarkan chest ini."
+          "§e[!] Chest gacha ini belum terdaftar.\n§7Minta admin untuk mendaftarkan chest ini."
         ));
       }
       return;
     }
 
+    // ── Chest terdaftar → SEMUA player bisa interact (tanpa trigger) ──
+
     // ── Guard: player lain sedang sesi ──────────────────
-    const sessionOwner = activeChests.get(key) ?? dpGet(K_CHEST_LOCK + key, null)?.ownerId ?? null;
-    if (sessionOwner && sessionOwner !== player.id) {
+    const sessionOwner2 = activeChests.get(key) ?? dpGet(K_CHEST_LOCK + key, null)?.ownerId ?? null;
+    if (sessionOwner2 && sessionOwner2 !== player.id) {
       system.run(() => player.sendMessage("§e[!] Chest sedang digunakan orang lain!"));
       return;
     }

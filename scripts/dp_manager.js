@@ -30,7 +30,7 @@ const DP_CFG = {
   K_LAST_SEEN:        "_ls:",
   CLEANUP_DAYS:       30,
   WARN_BYTES:         500_000,
-  CRITICAL_BYTES:     1_500_000,
+  CRITICAL_BYTES:     850_000,     // 85% dari 1MB — auto-cleanup SEBELUM penuh
   MONITOR_INTERVAL:   6000,     // ~5 menit
   CLEANUP_INTERVAL:   72000,    // ~1 jam
   CLEANUP_BATCH:      3,        // maks player di-cleanup per tick (spread load)

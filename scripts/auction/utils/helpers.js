@@ -69,8 +69,9 @@ export function onPlayerLeave(playerId) {
 // ═══ AUCTION HELPERS ═══
 export function getMinBid(listing) {
   if (!listing.bidCount || listing.bidCount === 0) return listing.startBid;
-  const pctInc = Math.ceil(listing.currentBid * CFG.BID_INCREMENT_PCT / 100);
-  return listing.currentBid + Math.max(CFG.MIN_BID_INCREMENT, pctInc);
+  // Pure 10% increment — minimum 1 coin to always move up
+  const pctInc = Math.max(1, Math.ceil(listing.currentBid * CFG.BID_INCREMENT_PCT / 100));
+  return listing.currentBid + pctInc;
 }
 
 export function getEffectivePrice(l) {

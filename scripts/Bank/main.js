@@ -4,6 +4,8 @@ import { world, system, CommandPermissionLevel } from "@minecraft/server";
 import { ActionFormData, ModalFormData, MessageFormData } from "@minecraft/server-ui";
 import { CFG } from "./config.js";
 import { getByteLength } from "../dp_manager.js";
+import { UIClose } from "../ui_close.js";
+import { pGet, pSet, pDel, getOnlinePlayer } from "../player_dp.js";
 
 // ═══════════════════════════════════════════════════════════
 // LOCK — mencegah race condition pada transaksi bersamaan
@@ -67,6 +69,8 @@ const addCoin = (player, n) => setCoin(player, getCoin(player) + n);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 function _getDailyRaw(playerId) {
+  const p = getOnlinePlayer(playerId);
+  if (p) return pGet(p, CFG.K_DAILY, { total: 0, date: "", freeUsed: 0 });
   return dp.get(CFG.K_DAILY + playerId, { total: 0, date: "", freeUsed: 0 });
 }
 
@@ -88,19 +92,32 @@ function addDailyUsed(playerId, amount, usedFree, cachedRaw) {
   d.date   = today;
   d.total += amount;
   if (usedFree) d.freeUsed = (d.freeUsed || 0) + 1;
-  dp.set(CFG.K_DAILY + playerId, d);
+  const p = getOnlinePlayer(playerId);
+  if (p) pSet(p, CFG.K_DAILY, d);
+  else dp.set(CFG.K_DAILY + playerId, d);
 }
 
 // ═══════════════════════════════════════════════════════════
-// HISTORY — personal per player
+// HISTORY — personal per player (Player DP)
 // ═══════════════════════════════════════════════════════════
 function pushHistory(playerId, entry) {
-  const hist = dp.get(CFG.K_HIST + playerId, []);
-  hist.unshift({ ...entry, ts: Date.now() });
-  dp.set(CFG.K_HIST + playerId, hist.slice(0, CFG.MAX_HISTORY));
+  const p = getOnlinePlayer(playerId);
+  if (p) {
+    const hist = pGet(p, CFG.K_HIST, []);
+    hist.unshift({ ...entry, ts: Date.now() });
+    pSet(p, CFG.K_HIST, hist.slice(0, CFG.MAX_HISTORY));
+  } else {
+    const hist = dp.get(CFG.K_HIST + playerId, []);
+    hist.unshift({ ...entry, ts: Date.now() });
+    dp.set(CFG.K_HIST + playerId, hist.slice(0, CFG.MAX_HISTORY));
+  }
 }
 
-const getHistory = (playerId) => dp.get(CFG.K_HIST + playerId, []);
+const getHistory = (playerId) => {
+  const p = getOnlinePlayer(playerId);
+  if (p) return pGet(p, CFG.K_HIST, []);
+  return dp.get(CFG.K_HIST + playerId, []);
+};
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL LOG — semua transaksi, 10 terakhir (untuk admin)
@@ -279,6 +296,7 @@ async function openBankMenu(player) {
   activeSessions.add(player.id);
   setCooldown(player);
   try { await _menuLoop(player); }
+  catch (e) { if (!e?.isUIClose) throw e; }
   finally { activeSessions.delete(player.id); }
 }
 
@@ -292,7 +310,7 @@ async function _menuLoop(player) {
     const reqBadge = reqs.length ? ` §c(${reqs.length})` : "";
 
     let body = `${CFG.HR}\n`;
-    body += `§6§l  B A N K   K O I N\n`;
+    body += `§6  B A N K   K O I N\n`;
     body += `${CFG.HR}\n\n`;
     body += `  §6⛃ §eSaldo\n`;
     body += `  §8└ §e${fmt(coin)} Koin\n\n`;
@@ -302,19 +320,20 @@ async function _menuLoop(player) {
     body += `\n${CFG.HR}`;
 
     const btns = [];
-    const form = new ActionFormData().title("§l§8 ♦ §6BANK KOIN§r§l §8♦ §r").body(body);
+    const form = new ActionFormData().title("§8 ♦ §6BANK KOIN§r §8♦ §r").body(body);
 
-    form.button(`§e§l  Transfer Koin\n§r  §8Kirim ke player lain`); btns.push("transfer");
-    form.button(`§b§l  Minta Koin\n§r  §8Request dari player lain`); btns.push("request");
-    form.button(`§a§l  Permintaan${reqBadge}\n§r  §8${reqs.length ? `${reqs.length} menunggu` : "Tidak ada"}`); btns.push("inbox");
-    form.button(`§f§l  Mutasi Saya\n§r  §810 transaksi terakhir`); btns.push("history");
-    form.button(`§6§l  Top Koin\n§r  §8Leaderboard saldo`); btns.push("top");
-    if (isAdmin) { form.button(`§c§l  Admin\n§r  §8Kelola bank`); btns.push("admin"); }
-    form.button("§8§l  Tutup"); btns.push("close");
+    form.button(`§e  Transfer Koin\n§r  §8Kirim ke player lain`, "textures/items/gold_ingot"); btns.push("transfer");
+    form.button(`§b  Minta Koin\n§r  §8Request dari player lain`, "textures/items/gold_nugget"); btns.push("request");
+    form.button(`§a  Permintaan${reqBadge}\n§r  §8${reqs.length ? `${reqs.length} menunggu` : "Tidak ada"}`, "textures/items/book_writable"); btns.push("inbox");
+    form.button(`§f  Mutasi Saya\n§r  §810 transaksi terakhir`, "textures/items/paper"); btns.push("history");
+    form.button(`§6  Top Koin\n§r  §8Leaderboard saldo`, "textures/items/diamond"); btns.push("top");
+    if (isAdmin) { form.button(`§c  Admin\n§r  §8Kelola bank`, "textures/items/nether_star"); btns.push("admin"); }
+    form.button("§8  Tutup", "textures/items/redstone_dust"); btns.push("close");
 
     playSfx(player, SFX.OPEN);
     const res = await form.show(player);
-    if (res.canceled || btns[res.selection] === "close") return;
+    if (res.canceled) throw new UIClose();
+    if (btns[res.selection] === "close") return;
 
     switch (btns[res.selection]) {
       case "transfer": await uiTransfer(player);    break;
@@ -334,18 +353,18 @@ async function uiTransfer(player) {
   const others = world.getPlayers().filter(p => p.id !== player.id);
   if (!others.length) {
     await new ActionFormData()
-      .title("§l§8 ♦ §eTRANSFER§r§l §8♦ §r")
+      .title("§8 ♦ §eTRANSFER§r §8♦ §r")
       .body(`${CFG.HR}\n§c Tidak ada player online lain.\n${CFG.HR}`)
-      .button("§6§l  ◀ Kembali").show(player);
+      .button("§6  Kembali", "textures/items/arrow").show(player);
     return;
   }
 
   const form1 = new ActionFormData()
-    .title("§l§8 ♦ §eTRANSFER§r§l §8♦ §r")
+    .title("§8 ♦ §eTRANSFER§r §8♦ §r")
     .body(`${CFG.HR}\n§8 Pilih player tujuan:\n${CFG.HR}`);
   for (const p of others)
-    form1.button(`§a§l  ${p.name}\n§r  §e${fmt(getCoin(p))}⛃`);
-  form1.button("§6§l  ◀ Kembali");
+    form1.button(`§a  ${p.name}\n§r  §e${fmt(getCoin(p))}⛃`);
+  form1.button("§6  Kembali", "textures/items/arrow");
 
   const res1 = await form1.show(player);
   if (res1.canceled || res1.selection === others.length) return;
@@ -361,7 +380,7 @@ async function uiTransfer(player) {
     : `§7 Pajak: §f${getTax()}% §7(ditambah ke jumlah)`;
 
   const res2 = await new ModalFormData()
-    .title(`§l  Transfer ke ${target.name}  §r`)
+    .title(`  Transfer ke ${target.name}  §r`)
     .textField(
       `§f Jumlah\n§7 Saldo: §e${fmt(myCoin)} §7| Min: §e${fmt(CFG.MIN_TRANSFER)} §7| Maks: §e${fmt(remain)}\n${freeInfo}`,
       "Contoh: 500",
@@ -400,7 +419,7 @@ async function uiTransfer(player) {
     : `§f Pajak   : §c-${fmt(taxAmt)} Koin\n`;
 
   const confirm = await new MessageFormData()
-    .title("§l  Konfirmasi Transfer  §r")
+    .title("  Konfirmasi Transfer  §r")
     .body(
       `${CFG.HR}\n` +
       `§f Kepada  : §a${target.name}\n` +
@@ -465,9 +484,9 @@ async function uiSendRequest(player) {
   const others = world.getPlayers().filter(p => p.id !== player.id);
   if (!others.length) {
     await new ActionFormData()
-      .title("§l§8 ♦ §bMINTA KOIN§r§l §8♦ §r")
+      .title("§8 ♦ §bMINTA KOIN§r §8♦ §r")
       .body(`${CFG.HR}\n§c Tidak ada player online lain.\n${CFG.HR}`)
-      .button("§6§l  ◀ Kembali").show(player);
+      .button("§6  Kembali", "textures/items/arrow").show(player);
     return;
   }
 
@@ -475,13 +494,13 @@ async function uiSendRequest(player) {
   for (const p of others) inboxCounts.set(p.id, getIncomingReqs(p.id).length);
 
   const form1 = new ActionFormData()
-    .title("§l§8 ♦ §bMINTA KOIN§r§l §8♦ §r")
+    .title("§8 ♦ §bMINTA KOIN§r §8♦ §r")
     .body(`${CFG.HR}\n§8 Pilih player:\n${CFG.HR}`);
   for (const p of others) {
     const full = (inboxCounts.get(p.id) ?? 0) >= CFG.MAX_PENDING_REQ;
-    form1.button(`${full ? "§8§l" : "§a§l"}  ${p.name}\n§r  §e${fmt(getCoin(p))}⛃`);
+    form1.button(`${full ? "§8" : "§a"}  ${p.name}\n§r  §e${fmt(getCoin(p))}⛃`);
   }
-  form1.button("§6§l  ◀ Kembali");
+  form1.button("§6  Kembali", "textures/items/arrow");
 
   const res1 = await form1.show(player);
   if (res1.canceled || res1.selection === others.length) return;
@@ -495,7 +514,7 @@ async function uiSendRequest(player) {
 
   // Step 2: Input
   const res2 = await new ModalFormData()
-    .title(`§l  Minta Koin dari ${target.name}  §r`)
+    .title(`  Minta Koin dari ${target.name}  §r`)
     .textField(
       `§f Jumlah §7(min §e${fmt(CFG.MIN_TRANSFER)}§7)\n§8 Kadaluarsa dalam 5 menit`,
       "Contoh: 200",
@@ -548,21 +567,22 @@ async function uiInbox(player) {
     const reqs = getIncomingReqs(player.id);
     if (!reqs.length) {
       await new ActionFormData()
-        .title("§l§8 ♦ §aPERMINTAAN§r§l §8♦ §r")
+        .title("§8 ♦ §aPERMINTAAN§r §8♦ §r")
         .body(`${CFG.HR}\n§8 Tidak ada permintaan masuk.\n${CFG.HR}`)
-        .button("§6§l  ◀ Kembali").show(player);
+        .button("§6  Kembali", "textures/items/arrow").show(player);
       return;
     }
 
     const form = new ActionFormData()
-      .title(`§l§8 ♦ §aPERMINTAAN §f(${reqs.length})§r§l §8♦ §r`)
+      .title(`§8 ♦ §aPERMINTAAN §f(${reqs.length})§r §8♦ §r`)
       .body(`${CFG.HR}\n§8 Pilih permintaan:\n${CFG.HR}`);
     for (const r of reqs)
-      form.button(`§f§l  ${r.fromName}\n§r  §e${fmt(r.amount)}⛃ §8| §f${minsLeft(r)}mnt`);
-    form.button("§6§l  ◀ Kembali");
+      form.button(`§f  ${r.fromName}\n§r  §e${fmt(r.amount)}⛃ §8| §f${minsLeft(r)}mnt`);
+    form.button("§6  Kembali", "textures/items/arrow");
 
     const res = await form.show(player);
-    if (res.canceled || res.selection === reqs.length) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === reqs.length) return;
 
     const req    = reqs[res.selection];
     const myCoin = getCoin(player);
@@ -576,7 +596,7 @@ async function uiInbox(player) {
       : `§f Pajak   : §c-${fmt(tax)} Koin\n`;
 
     const detail = await new ActionFormData()
-      .title(`§l§8 ♦ §f${req.fromName}§r§l §8♦ §r`)
+      .title(`§8 ♦ §f${req.fromName}§r §8♦ §r`)
       .body(
         `${CFG.HR}\n` +
         `  §eDari   §8── §a${req.fromName}\n` +
@@ -589,8 +609,8 @@ async function uiInbox(player) {
         `  §8Sisa: ${minsLeft(req)} menit\n` +
         `${CFG.HR}`
       )
-      .button("§c§l  Tolak")
-      .button(myCoin >= total ? "§a§l  Terima" : "§8§l  Saldo Kurang")
+      .button("§c  Tolak", "textures/items/redstone_dust")
+      .button(myCoin >= total ? "§a  Terima" : "§8  Saldo Kurang", "textures/items/emerald")
       .show(player);
 
     if (detail.canceled) continue;
@@ -665,7 +685,7 @@ async function uiInbox(player) {
 async function uiHistory(player) {
   const hist = getHistory(player.id).slice(0, 10);
 
-  let body = `${CFG.HR}\n§6§l  M U T A S I\n${CFG.HR}\n`;
+  let body = `${CFG.HR}\n§6  M U T A S I\n${CFG.HR}\n`;
 
   if (!hist.length) {
     body += "\n§8 Belum ada riwayat transaksi.\n";
@@ -698,9 +718,9 @@ async function uiHistory(player) {
   body += `\n${CFG.HR}`;
 
   await new ActionFormData()
-    .title("§l§8 ♦ §fMUTASI§r§l §8♦ §r")
+    .title("§8 ♦ §fMUTASI§r §8♦ §r")
     .body(body)
-    .button("§6§l  ◀ Kembali")
+    .button("§6  Kembali", "textures/items/arrow")
     .show(player);
 }
 
@@ -709,8 +729,8 @@ async function uiHistory(player) {
 // ═══════════════════════════════════════════════════════════
 async function uiLeaderboard(player) {
   const entries = getCoinLeaderboard(10);
-  const medals  = ["§6§l1.", "§f§l2.", "§e§l3."];
-  let body      = `${CFG.HR}\n§6§l  T O P   K O I N\n${CFG.HR}\n\n`;
+  const medals  = ["§61.", "§f2.", "§e3."];
+  let body      = `${CFG.HR}\n§6  T O P   K O I N\n${CFG.HR}\n\n`;
 
   if (!entries.length) {
     body += "§8 Belum ada data.\n";
@@ -723,9 +743,9 @@ async function uiLeaderboard(player) {
   }
 
   await new ActionFormData()
-    .title("§l§8 ♦ §6TOP KOIN§r§l §8♦ §r")
+    .title("§8 ♦ §6TOP KOIN§r §8♦ §r")
     .body(body + `\n${CFG.HR}`)
-    .button("§6§l  ◀ Kembali")
+    .button("§6  Kembali", "textures/items/arrow")
     .show(player);
 }
 
@@ -738,7 +758,7 @@ async function uiAdmin(player) {
   while (true) {
     const settings = getSettings();
     let ab = `${CFG.HR}\n`;
-    ab += `§c§l  A D M I N\n`;
+    ab += `§c  A D M I N\n`;
     ab += `${CFG.HR}\n\n`;
     ab += `  §eAdmin  §8── §a${player.name}\n`;
     ab += `  §ePajak  §8── §f${settings.taxPct}%\n`;
@@ -746,20 +766,21 @@ async function uiAdmin(player) {
     ab += `\n${CFG.HR}`;
 
     const form = new ActionFormData()
-      .title("§l§8 ♦ §cADMIN§r§l §8♦ §r")
+      .title("§8 ♦ §cADMIN§r §8♦ §r")
       .body(ab)
-      .button("§a§l  Beri Koin\n§r  §8Tambah saldo player")
-      .button("§c§l  Kurangi Koin\n§r  §8Potong saldo player")
-      .button("§e§l  Ubah Pajak\n§r  §8Persentase transfer")
-      .button("§b§l  Reset Limit\n§r  §8Reset limit harian")
-      .button("§c§l  Hapus Riwayat\n§r  §8Hapus mutasi player")
-      .button("§f§l  Lihat Saldo\n§r  §8Semua player online")
-      .button("§6§l  Log Global\n§r  §8Mutasi terakhir")
-      .button("§8§l  ◀ Kembali");
+      .button("§a  Beri Koin\n§r  §8Tambah saldo player", "textures/items/emerald")
+      .button("§c  Kurangi Koin\n§r  §8Potong saldo player", "textures/items/redstone_dust")
+      .button("§e  Ubah Pajak\n§r  §8Persentase transfer", "textures/items/gold_nugget")
+      .button("§b  Reset Limit\n§r  §8Reset limit harian", "textures/items/clock_item")
+      .button("§c  Hapus Riwayat\n§r  §8Hapus mutasi player", "textures/items/book_writable")
+      .button("§f  Lihat Saldo\n§r  §8Semua player online", "textures/items/gold_ingot")
+      .button("§6  Log Global\n§r  §8Mutasi terakhir", "textures/items/paper")
+      .button("§8  Kembali", "textures/items/arrow");
 
     playSfx(player, SFX.ADMIN);
     const res = await form.show(player);
-    if (res.canceled || res.selection === 7) return;
+    if (res.canceled) throw new UIClose();
+    if (res.selection === 7) return;
 
     if (res.selection === 0) await adminGiveCoin(player);
     if (res.selection === 1) await adminDeductCoin(player);
@@ -793,9 +814,9 @@ async function adminViewGlobalLog(admin) {
   }
 
   await new ActionFormData()
-    .title("§l  Log Mutasi Global  §r")
+    .title("  Log Mutasi Global  §r")
     .body(body + CFG.HR)
-    .button("§l Kembali")
+    .button(" Kembali", "textures/items/arrow")
     .show(admin);
 }
 
@@ -804,7 +825,7 @@ async function adminGiveCoin(admin) {
   if (!target) return;
 
   const res = await new ModalFormData()
-    .title(`§l  Beri Koin — ${target.name}  §r`)
+    .title(`  Beri Koin — ${target.name}  §r`)
     .textField(`§7 Saldo saat ini: §e${fmt(getCoin(target))} Koin`, "Contoh: 1000", { defaultValue: "0" })
     .show(admin);
 
@@ -827,7 +848,7 @@ async function adminDeductCoin(admin) {
   if (!target) return;
 
   const res = await new ModalFormData()
-    .title(`§l  Kurangi Koin — ${target.name}  §r`)
+    .title(`  Kurangi Koin — ${target.name}  §r`)
     .textField(`§7 Saldo saat ini: §e${fmt(getCoin(target))} Koin`, "Contoh: 500", { defaultValue: "0" })
     .show(admin);
 
@@ -855,7 +876,7 @@ async function adminDeductCoin(admin) {
 async function adminSetTax(admin) {
   const settings = getSettings();
   const res = await new ModalFormData()
-    .title("§l  Ubah Pajak  §r")
+    .title("  Ubah Pajak  §r")
     .slider(
       `§f Pajak §7(saat ini: §f${settings.taxPct}%§7)`,
       0,
@@ -884,7 +905,7 @@ async function adminResetDaily(admin) {
 
   const used    = getDailyUsed(target.id);
   const confirm = await new MessageFormData()
-    .title("§l  Reset Limit?  §r")
+    .title("  Reset Limit?  §r")
     .body(`§f Reset limit harian §c${target.name}§f?\n§7 Terpakai: §e${fmt(used)} §7/ §e${fmt(CFG.DAILY_LIMIT)}`)
     .button1("§f Batal").button2("§a Reset").show(admin);
 
@@ -901,7 +922,7 @@ async function adminClearHistory(admin) {
   if (!target) return;
 
   const confirm = await new MessageFormData()
-    .title("§l  Hapus Riwayat?  §r")
+    .title("  Hapus Riwayat?  §r")
     .body(`§f Hapus riwayat §c${target.name}§f?\n§c Tidak bisa diurungkan!`)
     .button1("§f Batal").button2("§c Hapus").show(admin);
 
@@ -918,9 +939,9 @@ async function adminViewBalances(admin) {
     body += `§a[O] §f${p.name}  §e${fmt(getCoin(p))} Koin\n§8    Limit: ${fmt(getDailyUsed(p.id))} / ${fmt(CFG.DAILY_LIMIT)}\n`;
 
   await new ActionFormData()
-    .title("§l  Saldo Player  §r")
+    .title("  Saldo Player  §r")
     .body(body + CFG.HR)
-    .button("§l Kembali")
+    .button(" Kembali", "textures/items/arrow")
     .show(admin);
 }
 
@@ -929,11 +950,11 @@ async function pickOnlinePlayer(admin, title) {
   if (!players.length) { admin.sendMessage("§c[Bank] Tidak ada player lain online."); return null; }
 
   const form = new ActionFormData()
-    .title(`§l§8 ♦ §f${title.toUpperCase()}§r§l §8♦ §r`)
+    .title(`§8 ♦ §f${title.toUpperCase()}§r §8♦ §r`)
     .body(`${CFG.HR}\n§8 Pilih player:\n${CFG.HR}`);
   for (const p of players)
-    form.button(`§a§l  ${p.name}\n§r  §e${fmt(getCoin(p))}⛃`);
-  form.button("§6§l  ◀ Kembali");
+    form.button(`§a  ${p.name}\n§r  §e${fmt(getCoin(p))}⛃`);
+  form.button("§6  Kembali", "textures/items/arrow");
 
   const res = await form.show(admin);
   if (res.canceled || res.selection === players.length) return null;
@@ -960,11 +981,11 @@ system.beforeEvents.startup.subscribe(init => {
           return;
         }
         if (activeSessions.has(player.id)) return;
-        system.run(() => openBankMenu(player).catch(e => console.error("[Bank] error:", e)));
+        system.run(() => openBankMenu(player).catch(e => { if (!e?.isUIClose) console.error("[Bank] error:", e); }));
         return { status: 0 };
       }
     );
-    console.log("[Bank] /lt:bank registered.");
+
   } catch (e) { console.warn("[Bank] Command registration failed:", e); }
 });
 
@@ -978,7 +999,7 @@ world.beforeEvents.chatSend.subscribe(event => {
     return;
   }
   if (activeSessions.has(player.id)) return;
-  system.run(() => openBankMenu(player).catch(e => console.error("[Bank] error:", e)));
+  system.run(() => openBankMenu(player).catch(e => { if (!e?.isUIClose) console.error("[Bank] error:", e); }));
 });
 
 system.afterEvents.scriptEventReceive.subscribe(ev => {
@@ -986,7 +1007,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
   const src = ev.sourceEntity;
   if (!src || typeof src.hasTag !== "function") return;
   if (activeSessions.has(src.id)) return;
-  system.run(() => openBankMenu(src).catch(e => console.error("[Bank] error:", e)));
+  system.run(() => openBankMenu(src).catch(e => { if (!e?.isUIClose) console.error("[Bank] error:", e); }));
 });
 
 // ═══════════════════════════════════════════════════════════
