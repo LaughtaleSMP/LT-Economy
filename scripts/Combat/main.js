@@ -13,9 +13,9 @@ const dp = {
   },
   set: (k, v) => {
     try { world.setDynamicProperty(k, JSON.stringify(v)); }
-    catch {}
+    catch { }
   },
-  del: (k) => { try { world.setDynamicProperty(k, undefined); } catch {} },
+  del: (k) => { try { world.setDynamicProperty(k, undefined); } catch { } },
 };
 
 function ensureCoinObj() {
@@ -30,34 +30,34 @@ function getCoin(player) {
 
 function setCoin(player, n) {
   try { ensureCoinObj()?.setScore(player.scoreboardIdentity ?? player, Math.max(0, Math.floor(n))); }
-  catch {}
+  catch { }
 }
 
 const fmt = (n) => Math.floor(n).toLocaleString("id-ID");
 
 const SFX = {
-  TOGGLE_ON:  { id: "random.anvil_use", pitch: 1.2, vol: 0.8 },
-  TOGGLE_OFF: { id: "random.click",     pitch: 0.8, vol: 0.7 },
-  KILL:       { id: "random.levelup",    pitch: 1.5, vol: 1.0 },
-  DEATH:      { id: "note.bass",         pitch: 0.5, vol: 1.0 },
-  BLOCKED:    { id: "note.bass",         pitch: 0.7, vol: 0.5 },
-  MENU:       { id: "random.click",      pitch: 1.3, vol: 0.7 },
+  TOGGLE_ON: { id: "random.anvil_use", pitch: 1.2, vol: 0.8 },
+  TOGGLE_OFF: { id: "random.click", pitch: 0.8, vol: 0.7 },
+  KILL: { id: "random.levelup", pitch: 1.5, vol: 1.0 },
+  DEATH: { id: "note.bass", pitch: 0.5, vol: 1.0 },
+  BLOCKED: { id: "note.bass", pitch: 0.7, vol: 0.5 },
+  MENU: { id: "random.click", pitch: 1.3, vol: 0.7 },
 };
-const sfx = (p, s) => { try { p.playSound(s.id, { pitch: s.pitch, volume: s.vol }); } catch {} };
+const sfx = (p, s) => { try { p.playSound(s.id, { pitch: s.pitch, volume: s.vol }); } catch { } };
 
-const toggleCooldown   = new Map();
-const killCooldown     = new Map();
-const globalKillCD     = new Map();
-const combatTagUntil   = new Map();
-const graceUntil       = new Map();
-const activeSessions   = new Set();
+const toggleCooldown = new Map();
+const killCooldown = new Map();
+const globalKillCD = new Map();
+const combatTagUntil = new Map();
+const graceUntil = new Map();
+const activeSessions = new Set();
 const pvpActivePlayers = new Set();
-const _warnCooldown    = new Map();
-const illegalOffenses  = new Map();
+const _warnCooldown = new Map();
+const illegalOffenses = new Map();
 
 const combatStatsCache = new Map();
 const combatStatsDirty = new Set();
-const hudOnCache       = new Map();
+const hudOnCache = new Map();
 let killLogCache = null;
 let killLogDirty = false;
 
@@ -93,7 +93,7 @@ function isInProtectedLand(player) {
       const z1 = Math.min(area.from.z, area.to.z), z2 = Math.max(area.from.z, area.to.z);
       if (loc.x >= x1 && loc.x <= x2 && loc.y >= y1 && loc.y <= y2 && loc.z >= z1 && loc.z <= z2) return true;
     }
-  } catch {}
+  } catch { }
   return false;
 }
 
@@ -140,7 +140,7 @@ function getPlayerStatus(player) {
   try {
     const hc = player.getComponent("minecraft:health");
     if (hc) { hp = hc.currentValue; maxHp = hc.effectiveMax; }
-  } catch {}
+  } catch { }
   try {
     const inv = player.getComponent("minecraft:inventory")?.container;
     if (inv) {
@@ -158,11 +158,11 @@ function getPlayerStatus(player) {
                 if (item.typeId.includes(k)) { armor += v; break; }
               }
             }
-          } catch {}
+          } catch { }
         }
       }
     }
-  } catch {}
+  } catch { }
   const inCombat = (combatTagUntil.get(player.id) ?? 0) > system.currentTick;
   const isGrace = (graceUntil.get(player.id) ?? 0) > system.currentTick;
   return { hp, maxHp, armor, weapon, inCombat, isGrace };
@@ -234,13 +234,13 @@ async function showPvPMenu(player) {
 
   try {
     while (true) {
-      const isOn  = isPvPOn(player);
+      const isOn = isPvPOn(player);
       const stats = getStats(player.id);
-      const coin  = getCoin(player);
-      const kd    = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(2) : stats.kills.toFixed(0);
-      const st    = getPlayerStatus(player);
+      const coin = getCoin(player);
+      const kd = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(2) : stats.kills.toFixed(0);
+      const st = getPlayerStatus(player);
       const hudOn = isHudOn(player.id);
-      const mult  = getStreakMult(stats.streak);
+      const mult = getStreakMult(stats.streak);
 
       let nearbyEnemies = 0;
       try {
@@ -248,10 +248,10 @@ async function showPvPMenu(player) {
           if (p.id === player.id || !isPvPOn(p)) continue;
           const d = player.location;
           const e = p.location;
-          const distSq = (d.x-e.x)**2 + (d.y-e.y)**2 + (d.z-e.z)**2;
+          const distSq = (d.x - e.x) ** 2 + (d.y - e.y) ** 2 + (d.z - e.z) ** 2;
           if (distSq <= 400) nearbyEnemies++;
         }
-      } catch {}
+      } catch { }
 
       let body = `${CFG.HR}\n`;
       body += `§c  C O M B A T   P v P\n`;
@@ -259,7 +259,7 @@ async function showPvPMenu(player) {
 
       body += `  §eStatus §8── ${isOn ? "§cAKTIF \u2694" : "§aNONAKTIF \u2714"}\n`;
       if (st.inCombat) body += `  §c  \u26a0 DALAM PERTARUNGAN!\n`;
-      if (st.isGrace)  body += `  §e  \u26a1 GRACE PERIOD\n`;
+      if (st.isGrace) body += `  §e  \u26a1 GRACE PERIOD\n`;
       body += `\n`;
 
       body += `  §6\u2726 §eStatus Player\n`;
@@ -318,8 +318,8 @@ async function showPvPMenu(player) {
 
       switch (btns[res.selection]) {
         case "toggle": await confirmToggle(player); break;
-        case "log":    await showKillLog(player); break;
-        case "lb":     await showLeaderboard(player); break;
+        case "log": await showKillLog(player); break;
+        case "lb": await showLeaderboard(player); break;
         case "settings": await showSettings(player); break;
       }
     }
@@ -373,7 +373,7 @@ async function confirmToggle(player) {
 
 async function showSettings(player) {
   const curOn = isHudOn(player.id);
-  const coin  = getCoin(player);
+  const coin = getCoin(player);
 
   let body = `${CFG.HR}\n`;
   body += `§b  \u2699 P E N G A T U R A N\n`;
@@ -471,14 +471,14 @@ async function showLeaderboard(player) {
 function timeAgo(ts) {
   if (!ts) return "?";
   const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60)    return `${s}dtk lalu`;
-  if (s < 3600)  return `${Math.floor(s / 60)}mnt lalu`;
+  if (s < 60) return `${s}dtk lalu`;
+  if (s < 3600) return `${Math.floor(s / 60)}mnt lalu`;
   if (s < 86400) return `${Math.floor(s / 3600)}jam lalu`;
   return `${Math.floor(s / 86400)}hr lalu`;
 }
 
 world.afterEvents.entityHurt.subscribe(ev => {
-  const victim   = ev.hurtEntity;
+  const victim = ev.hurtEntity;
   const attacker = ev.damageSource?.damagingEntity;
   if (!victim || !attacker) return;
   if (victim.typeId !== "minecraft:player" || attacker.typeId !== "minecraft:player") return;
@@ -487,7 +487,7 @@ world.afterEvents.entityHurt.subscribe(ev => {
     try {
       const h = victim.getComponent("minecraft:health");
       if (h) h.setCurrentValue(Math.min(h.currentValue + ev.damage, h.effectiveMax));
-    } catch {}
+    } catch { }
   };
 
   const atkPvP = isPvPOn(attacker);
@@ -530,7 +530,7 @@ world.afterEvents.entityHurt.subscribe(ev => {
 });
 
 world.afterEvents.entityDie.subscribe(ev => {
-  const victim   = ev.deadEntity;
+  const victim = ev.deadEntity;
   const attacker = ev.damageSource?.damagingEntity;
   if (!victim || !attacker) return;
   if (victim.typeId !== "minecraft:player" || attacker.typeId !== "minecraft:player") return;
@@ -588,7 +588,7 @@ world.afterEvents.entityDie.subscribe(ev => {
         illegalOffenses.delete(atkId);
         attacker.sendMessage(`§4[PvP] §cDikick karena pelanggaran berulang!`);
         system.runTimeout(() => {
-          try { attacker.runCommandAsync(`kick "${attacker.name}" §cDikick: membunuh player non-PvP berulang kali`); } catch {}
+          try { attacker.runCommandAsync(`kick "${attacker.name}" §cDikick: membunuh player non-PvP berulang kali`); } catch { }
         }, 40);
       }
     });
@@ -644,6 +644,20 @@ world.afterEvents.entityDie.subscribe(ev => {
 
   system.run(() => {
     sfx(attacker, SFX.KILL);
+
+    // ── Spawn particle Games:coins di posisi attacker saat dapat koin dari PvP kill ──
+    if (actualGain > 0) {
+      try {
+        attacker.dimension.spawnParticle("minecraft:Games:coins", {
+          x: attacker.location.x,
+          y: attacker.location.y + 1,
+          z: attacker.location.z,
+        });
+      } catch {
+        try { attacker.runCommand("particle minecraft:Games:coins ~ ~1 ~"); } catch { }
+      }
+    }
+
     attacker.sendMessage(`§a[PvP] §c⚔ §fKamu membunuh §c${victim.name}!\n§a  +${fmt(actualGain)} ⛃${streakBonus}\n§7  Saldo: §e${fmt(getCoin(attacker))} ⛃`);
     if (atkStats.streak >= 3) {
       world.sendMessage(`§c[PvP] §f${attacker.name} §c⚔ §f${victim.name} §e(${fmt(actualGain)}⛃)${streakBonus}`);
@@ -679,13 +693,13 @@ system.runInterval(() => {
   for (const player of world.getPlayers()) {
     if (!isPvPOn(player)) continue;
     if (!isHudOn(player.id)) continue;
-    const now    = system.currentTick;
-    const grace  = (graceUntil.get(player.id) ?? 0) > now;
+    const now = system.currentTick;
+    const grace = (graceUntil.get(player.id) ?? 0) > now;
     const combat = (combatTagUntil.get(player.id) ?? 0) > now;
-    const stats  = getStats(player.id);
-    const mult   = getStreakMult(stats.streak);
-    const kd     = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(1) : stats.kills.toString();
-    const coin   = getCoin(player);
+    const stats = getStats(player.id);
+    const mult = getStreakMult(stats.streak);
+    const kd = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(1) : stats.kills.toString();
+    const coin = getCoin(player);
 
     let bar;
     if (grace) {
@@ -698,7 +712,7 @@ system.runInterval(() => {
       const sk = stats.streak >= 3 ? ` §6🔥${stats.streak}x` : "";
       bar = `§a⚔ PvP §8│ §fK:§e${stats.kills} §fD:§7${stats.deaths}${sk} §8│ §e⛃§f${fmt(coin)} §8│ §8TPS:${getTpsDisplay()}`;
     }
-    try { player.onScreenDisplay.setActionBar(bar); } catch {}
+    try { player.onScreenDisplay.setActionBar(bar); } catch { }
   }
 }, CFG.HUD_INT);
 
@@ -769,7 +783,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
     const target = ev.message?.trim();
     if (!target) { src?.sendMessage?.("\u00a7c[PvP] /scriptevent combat:reset_stats NamaPlayer"); return; }
     const p = world.getPlayers().find(pl => pl.name === target);
-    if (p) { setStats(p.id, { kills:0, deaths:0, earned:0, lost:0, streak:0, bestStreak:0, lastKillTs:0 }); src?.sendMessage?.(`\u00a7a[PvP] Stats \u00a7f${target} \u00a7adireset.`); }
+    if (p) { setStats(p.id, { kills: 0, deaths: 0, earned: 0, lost: 0, streak: 0, bestStreak: 0, lastKillTs: 0 }); src?.sendMessage?.(`\u00a7a[PvP] Stats \u00a7f${target} \u00a7adireset.`); }
     else src?.sendMessage?.(`\u00a7c[PvP] \u00a7f${target} \u00a7ctidak ditemukan.`);
     return;
   }
@@ -807,7 +821,7 @@ world.afterEvents.playerLeave.subscribe(({ playerId }) => {
           break;
         }
       }
-    } catch {}
+    } catch { }
   }
   if (combatStatsDirty.has(playerId)) {
     const s = combatStatsCache.get(playerId);
