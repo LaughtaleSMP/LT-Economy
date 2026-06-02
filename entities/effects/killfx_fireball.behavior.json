@@ -1,0 +1,73 @@
+{
+  "format_version": "1.16.1",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "lt:killfx_fireball",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "animations": {
+        "crash": "controller.animation.killfx_fireball_crash"
+      },
+      "scripts": {
+        "animate": [
+          "crash"
+        ]
+      }
+    },
+    "component_groups": {
+      "despawn_group": {
+        "minecraft:instant_despawn": {}
+      },
+      "fireball_crash_group": {
+        "minecraft:is_baby": {}
+      }
+    },
+    "components": {
+      "minecraft:conditional_bandwidth_optimization": {},
+      "minecraft:timer": {
+        "time": 0.4,
+        "time_down_event": {
+          "event": "fireball_crash",
+          "target": "self"
+        }
+      },
+      "minecraft:skin_id": {
+        "value": 6
+      },
+      "minecraft:damage_sensor": {
+        "triggers": [
+          {
+            "deals_damage": false
+          }
+        ]
+      },
+      "minecraft:knockback_resistance": {
+        "value": 1000.0
+      },
+      "minecraft:fire_immune": {},
+      "minecraft:scale": {
+        "value": 0.5
+      },
+      "minecraft:collision_box": {
+        "width": 0.0,
+        "height": 0.0
+      }
+    },
+    "events": {
+      "despawn": {
+        "add": {
+          "component_groups": [
+            "despawn_group"
+          ]
+        }
+      },
+      "fireball_crash": {
+        "add": {
+          "component_groups": [
+            "fireball_crash_group"
+          ]
+        }
+      }
+    }
+  }
+}

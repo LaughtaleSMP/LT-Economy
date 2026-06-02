@@ -1,0 +1,22 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.killfx_fireball_crash": {
+      "initial_state": "wait_for_crash",
+      "states": {
+        "wait_for_crash": {
+          "transitions": [
+            {
+              "on_crash": "query.is_baby"
+            }
+          ]
+        },
+        "on_crash": {
+          "on_entry": [
+            "@s despawn"
+          ]
+        }
+      }
+    }
+  }
+}

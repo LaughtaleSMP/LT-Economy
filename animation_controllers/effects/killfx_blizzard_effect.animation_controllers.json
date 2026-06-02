@@ -1,0 +1,26 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.killfx_blizzard_effect": {
+      "initial_state": "effect_blizzard",
+      "states": {
+        "effect_blizzard": {
+          "on_entry": [
+            "variable.timer = query.life_time;",
+            "/playsound mob.stray.ambient @a[r=48] ~ ~4 ~ 0.8 0.5",
+            "/playsound random.glass @a[r=48] ~ ~4 ~ 0.7 1.2"
+          ],
+          "on_exit": [
+            "@s active_aoe_base"
+          ],
+          "transitions": [
+            {
+              "no_effect": "query.life_time - (variable.timer ?? query.life_time) > 3 || query.skin_id != 3"
+            }
+          ]
+        },
+        "no_effect": {}
+      }
+    }
+  }
+}

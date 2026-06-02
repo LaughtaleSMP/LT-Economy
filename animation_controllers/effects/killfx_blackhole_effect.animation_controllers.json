@@ -1,0 +1,25 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.killfx_blackhole_effect": {
+      "initial_state": "effect_blackhole",
+      "states": {
+        "effect_blackhole": {
+          "on_entry": [
+            "variable.timer = query.life_time;",
+            "/playsound mob.endermen.portal @a[r=48] ~ ~1.5 ~ 0.7 0.3"
+          ],
+          "on_exit": [
+            "@s active_aoe_base"
+          ],
+          "transitions": [
+            {
+              "no_effect": "query.life_time - (variable.timer ?? query.life_time) > 2 || query.skin_id != 2"
+            }
+          ]
+        },
+        "no_effect": {}
+      }
+    }
+  }
+}

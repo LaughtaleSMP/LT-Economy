@@ -1,0 +1,64 @@
+{
+  "format_version": "1.16.1",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "lt:killfx_geode",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "animations": {
+        "crystal_line": "animation.killfx_crystal_line.commands"
+      },
+      "scripts": {
+        "animate": [
+          "crystal_line"
+        ]
+      }
+    },
+    "component_groups": {
+      "despawn_group": {
+        "minecraft:instant_despawn": {}
+      }
+    },
+    "components": {
+      "minecraft:conditional_bandwidth_optimization": {},
+      "minecraft:timer": {
+        "time": 4.0,
+        "time_down_event": {
+          "event": "despawn",
+          "target": "self"
+        }
+      },
+      "minecraft:skin_id": {
+        "value": 2
+      },
+      "minecraft:damage_sensor": {
+        "triggers": [
+          {
+            "deals_damage": false
+          }
+        ]
+      },
+      "minecraft:knockback_resistance": {
+        "value": 1000.0
+      },
+      "minecraft:fire_immune": {},
+      "minecraft:collision_box": {
+        "width": 0.0,
+        "height": 0.0
+      },
+      "minecraft:physics": {
+        "has_gravity": false,
+        "has_collision": false
+      }
+    },
+    "events": {
+      "despawn": {
+        "add": {
+          "component_groups": [
+            "despawn_group"
+          ]
+        }
+      }
+    }
+  }
+}

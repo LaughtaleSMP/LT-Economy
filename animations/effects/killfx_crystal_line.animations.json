@@ -1,0 +1,54 @@
+{
+  "format_version": "1.10.0",
+  "animations": {
+    "animation.killfx_crystal_line.commands": {
+      "animation_length": 1.5,
+      "loop": false,
+      "timeline": {
+        "0": [
+          "/summon lt:killfx_crystal_spike ~-1 ~1 ~2",
+          "/playsound block.amethyst_block.place @a[r=48] ~ ~ ~ 1.0 0.7",
+          "/playsound random.anvil_use @a[r=48] ~ ~ ~ 0.4 2.0"
+        ],
+        "0.15": [
+          "/summon lt:killfx_crystal_spike ~2 ~1 ~1",
+          "/playsound block.amethyst_cluster.break @a[r=48] ~ ~ ~ 1.0 1.0",
+          "/playsound block.amethyst_block.chime @a[r=48] ~ ~ ~ 0.7 0.8"
+        ],
+        "0.3": [
+          "/summon lt:killfx_crystal_spike ~-2 ~1 ~-1",
+          "/playsound block.amethyst_block.place @a[r=48] ~ ~ ~ 1.0 1.2",
+          "/playsound random.anvil_use @a[r=48] ~ ~ ~ 0.4 2.0"
+        ],
+        "0.45": [
+          "/summon lt:killfx_crystal_spike ~1 ~1 ~-2",
+          "/playsound block.amethyst_cluster.break @a[r=48] ~ ~ ~ 1.0 1.4",
+          "/playsound block.amethyst_block.chime @a[r=48] ~ ~ ~ 0.8 1.2"
+        ],
+        "0.6": [
+          "/summon lt:killfx_crystal_spike ~0 ~1 ~0",
+          "/playsound block.amethyst_block.place @a[r=48] ~ ~ ~ 1.0 1.6",
+          "/playsound conduit.activate @a[r=48] ~ ~ ~ 0.6 1.0"
+        ],
+        "0.75": [
+          "/summon lt:killfx_crystal_spike ~-1 ~1 ~-2",
+          "/playsound block.amethyst_cluster.break @a[r=48] ~ ~ ~ 1.0 1.8",
+          "/playsound block.amethyst_block.chime @a[r=48] ~ ~ ~ 0.9 1.5",
+          "/playsound conduit.ambient @a[r=48] ~ ~ ~ 0.7 1.5"
+        ],
+        "0.9": [
+          "/summon lt:killfx_crystal_spike ~2 ~1 ~-1",
+          "/playsound block.amethyst_block.chime @a[r=48] ~ ~ ~ 1.0 1.8",
+          "/playsound conduit.activate @a[r=48] ~ ~ ~ 0.7 1.5"
+        ],
+        "1.1": [
+          "/summon lt:killfx_crystal_spike ~-2 ~1 ~1",
+          "/playsound block.amethyst_block.chime @a[r=48] ~ ~ ~ 1.0 2.0",
+          "/playsound conduit.activate @a[r=48] ~ ~ ~ 0.8 2.0",
+          "/playsound random.levelup @a[r=48] ~ ~ ~ 0.5 2.0",
+          "@s despawn"
+        ]
+      }
+    }
+  }
+}
