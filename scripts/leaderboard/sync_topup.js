@@ -20,6 +20,7 @@ import {
   FIRST_TOPUP_CURRENCIES,
 } from "../topup_info.js";
 import { getGem, setGem } from "../gacha/utils/scoreboard.js";
+import { recordTopupLog } from "../gacha/main.js";
 
 // Re-export bonus constants supaya konsumen lama (welcome/*, baseline) yang
 // pernah import dari sini tetap kompatibel — single source tetap topup_info.js.
@@ -345,6 +346,7 @@ function _tryApplyOnline(safeName, obj, amount) {
           }
           applied = true;
           trackFlow("topup", amount);
+          recordTopupLog("WebStore", safeName, player.id, obj, "topup", amount, before, target, false);
           console.log(`[Topup] GEM APPLY ${safeName}: before=${before} +${amount} = target=${target}, readback=${after}`);
         } else {
           console.warn(`[Topup] setGem returned false for ${safeName}: before=${before} target=${target}`);
@@ -352,9 +354,14 @@ function _tryApplyOnline(safeName, obj, amount) {
       } else {
         const sb = world.scoreboard.getObjective(obj);
         if (sb) {
+          let before = 0;
+          try { before = sb.getScore(player) ?? 0; } catch {}
           sb.addScore(player, amount);
+          let after = before + amount;
+          try { after = sb.getScore(player) ?? after; } catch {}
           applied = true;
           trackFlow("topup", amount);
+          recordTopupLog("WebStore", safeName, player.id, obj, "topup", amount, before, after, false);
         }
       }
     } else {
@@ -438,6 +445,7 @@ async function _processOffline(row, id, safeName, obj, amount) {
     _doneIds.add(id);
     _addDailyTotal(safeName, obj, amount);
     const bonusMsg = bonus > 0 ? ` +${bonus} bonus 1st-topup` : "";
+    recordTopupLog("WebStore", safeName, pid, obj, "topup", amount, base, newBal, true);
     await _markTopup(row, "done", `+${amount} ${obj} → ${safeName} (offline, pending ${newBal})${bonusMsg}`);
     console.log(`[Topup] OK offline: +${amount} ${obj} → ${safeName} (pending=${newBal})${bonusMsg}`);
   } catch (e) {

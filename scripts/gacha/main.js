@@ -100,7 +100,7 @@ function _flushTopupLog() {
   } catch { system.runTimeout(_flushTopupLog, 20); }
 }
 
-function recordTopupLog(adminName, targetName, targetId, currency, action, amount, before, after, isOffline) {
+export function recordTopupLog(adminName, targetName, targetId, currency, action, amount, before, after, isOffline) {
   const log = _ensureTopupCache();
   log.push({ ts: Date.now(), a: adminName, t: targetName, i: targetId, c: currency, x: action, n: amount, b: before, f: after, o: isOffline ? 1 : 0 });
   _topupDirty = true;
