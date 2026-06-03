@@ -123,7 +123,8 @@ export function consumeFlow() {
   try {
     const sb = world.scoreboard.getObjective("_eco_flow");
     if (sb) {
-      const flowKeys = ["land_buy", "land_ppn", "land_refund", "land_buy_gem"];
+      const flowKeys = ["land_buy", "land_ppn", "land_refund", "land_buy_gem",
+                        "land_expand", "land_expand_ppn", "land_expand_gem"];
       for (const k of flowKeys) {
         try {
           const v = sb.getScore(k);

@@ -46,7 +46,7 @@ export function pushMetricsHistory(serverMetrics) {
   ];
   httpWithTimeout(req).then(r => {
     if (r.status >= 200 && r.status < 300) {
-      console.log("[MH] OK");
+      // console.log("[MH] OK");
       _pruneMetricsHistory();
     } else {
       console.warn(`[MH] FAIL ${r.status}: ${r.body?.substring(0, 150)}`);
@@ -113,7 +113,7 @@ export function pushEcoHistory(summary, logs, flowForInsert) {
     ];
     httpWithTimeout(ecoReq).then(er => {
       if (er.status >= 200 && er.status < 300) {
-        console.log("[Eco-History] OK");
+        // console.log("[Eco-History] OK");
         _pruneEcoHistory();
       } else {
         console.warn(`[Eco-History] FAIL ${er.status}: ${er.body?.substring(0, 150)}`);
@@ -138,7 +138,7 @@ export function pushEcoHistory(summary, logs, flowForInsert) {
       } catch {}
     }
     if (skip) {
-      console.log("[Eco-History] Skipped — instance lain sudah insert dalam 60s terakhir");
+      // console.log("[Eco-History] Skipped — instance lain sudah insert dalam 60s terakhir");
       return;
     }
     doInsert();
@@ -200,7 +200,7 @@ export function pushWeatherHistory(wx, startMs, endMs, worldTimeStart, worldDay)
   ];
   httpWithTimeout(req).then(r => {
     if (r.status >= 200 && r.status < 300) {
-      console.log(`[WX-History] OK ${wx} ${(dur / 1000).toFixed(0)}s`);
+      // console.log(`[WX-History] OK ${wx} ${(dur / 1000).toFixed(0)}s`);
       _pruneWeatherHistory();
     } else {
       console.warn(`[WX-History] FAIL ${r.status}: ${r.body?.substring(0, 120)}`);

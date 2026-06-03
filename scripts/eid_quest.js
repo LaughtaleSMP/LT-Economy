@@ -543,10 +543,11 @@ system.runInterval(() => {
 // STARTUP — §8 health check & monitoring
 // ═══════════════════════════════════════════════════════════
 system.runTimeout(() => {
-  console.warn(
-    `[EidQuest] Loaded: Shard quest system` +
-    (isEidActive() ? ` [EVENT ACTIVE — ${getEidTimeLeft()} left]` : "") +
-    ` | Cache: ${_questCache.size}/${QUEST_CACHE_MAX}` +
-    ` | Intervals: flush=${FLUSH_INTERVAL}t, expire=${EXPIRE_INTERVAL}t, sb=${SB_RESOLVE_INTERVAL}t`
-  );
+  if (isEidActive()) {
+    console.warn(
+      `[EidQuest] Loaded: Shard quest system [EVENT ACTIVE — ${getEidTimeLeft()} left]` +
+      ` | Cache: ${_questCache.size}/${QUEST_CACHE_MAX}` +
+      ` | Intervals: flush=${FLUSH_INTERVAL}t, expire=${EXPIRE_INTERVAL}t, sb=${SB_RESOLVE_INTERVAL}t`
+    );
+  }
 }, 60);

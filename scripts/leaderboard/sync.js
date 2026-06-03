@@ -141,12 +141,40 @@ function _readWeeklyLb() {
 }
 
 function _readEconLogs() {
-  let bankLog = [], auctionLog = [], gachaLog = [], topupLog = [];
+  let bankLog = [], auctionLog = [], gachaLog = [], topupLog = [], landLog = [];
   try { bankLog = dpGet("bank:global_hist", []).slice(-50); } catch {}
   try { auctionLog = dpGet("auc:hist", []).slice(-50); } catch {}
   try { gachaLog = dpGet("g_hist", []).slice(-50); } catch {}
   try { topupLog = dpGetChunked("gacha:topup_log", []).slice(-50); } catch {}
-  return { bankLog, auctionLog, gachaLog, topupLog };
+  // Land log: read from _land_hist scoreboard (cross-pack bridge from Mimi Land)
+  try {
+    const sb = world.scoreboard.getObjective("_land_hist");
+    if (sb) {
+      const parts = sb.getParticipants();
+      for (const p of parts) {
+        try {
+          const entry = JSON.parse(p.displayName);
+          if (entry && entry.p) {
+            landLog.push({
+              ts: new Date(entry.ts).toISOString(),
+              player: entry.p,
+              action: entry.a,
+              detail: entry.d,
+              coin: entry.c || 0,
+              gem: entry.g || 0
+            });
+          }
+        } catch {}
+      }
+      // Sort by timestamp, keep last 50
+      landLog.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+      landLog = landLog.slice(-50);
+      // NOTE: Do NOT clear scoreboard here — land_hist is an append-only
+      // log with 50-entry cap managed by Mimi Land. Clearing would make
+      // logs disappear between sync cycles (5 min).
+    }
+  } catch {}
+  return { bankLog, auctionLog, gachaLog, topupLog, landLog };
 }
 
 function _attachFeatureGuide(gachaLB) {
@@ -158,6 +186,7 @@ function _attachFeatureGuide(gachaLB) {
 }
 
 function _buildPayload({ weekly, onlinePlayers, gachaLB, logs, discCodes, serverMetrics }) {
+  if (logs.landLog && logs.landLog.length > 0) gachaLB.land_log = logs.landLog;
   return {
     id: "current",
     week_start: new Date(weekly.weekStart).toISOString(),
@@ -190,10 +219,10 @@ async function _sendFullSyncPayload(payload) {
 
 function _logFullSyncOk(status, entries, gachaLB, onlinePlayers) {
   const gc = Object.values(gachaLB).reduce((s, a) => Math.max(s, Array.isArray(a) ? a.length : 0), 0);
-  console.log(
-    `[LB-Sync] OK (${status}): ${entries.length} weekly, ` +
-    `${gc} gacha, ${onlinePlayers.length} online.`
-  );
+  // console.log(
+  //   `[LB-Sync] OK (${status}): ${entries.length} weekly, ` +
+  //   `${gc} gacha, ${onlinePlayers.length} online.`
+  // );
 }
 
 function _postSyncSideEffects(serverMetrics, gachaLB, logs) {
