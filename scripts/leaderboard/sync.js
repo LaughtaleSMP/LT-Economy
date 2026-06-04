@@ -31,6 +31,7 @@ import { buildExportAll } from "../gacha/utils/export.js";
 import { getKillFx } from "../kill_fx.js";
 import { PT_POOL } from "../gacha/config.js";
 import { CFG as COMBAT_CFG } from "../Combat/config.js";
+import { checkWorldTransition, getWorldId, isBackupSafe, unlockBackup, backupFingerprint, hasBackupChanged } from "./sync_world_guard.js";
 
 export { pollTopupQueue } from "./sync_topup.js";
 export { pollRecoveryQueue } from "./sync_recovery.js";
@@ -82,6 +83,10 @@ export async function syncLeaderboard() {
 
     _attachFeatureGuide(gachaLB);
 
+    // World transition detection — runs once on first sync
+    await checkWorldTransition();
+    gachaLB._world_id = getWorldId();
+
     // Skip players without paid assets — save Supabase payload size
     try {
       const backups = buildExportAll();
@@ -109,20 +114,27 @@ export async function syncLeaderboard() {
           });
         }
       }
-      gachaLB.player_backups = filtered;
-      gachaLB._backup_ts = Date.now();
-      // Tag→name maps — web panel can't import config.js so we ship lookup tables
-      const trailMap = {};
-      for (const p of PT_POOL) trailMap[p.tag] = p.name;
-      gachaLB._trail_names = trailMap;
-      const fxMap = {};
-      const _fk = (id) => Array.isArray(id) ? JSON.stringify(id) : id;
-      for (const e of COMBAT_CFG.KILL_EFFECTS) fxMap[_fk(e.id)] = e.name;
-      gachaLB._fx_names = fxMap;
+
+      // Guard: don't overwrite rich backup with empty new-world data
+      if (!isBackupSafe()) {
+        console.warn("[LB-Sync] Backup SKIPPED — new world detected, waiting for recovery");
+      } else {
+        const fp = backupFingerprint(filtered);
+        if (hasBackupChanged(fp)) {
+          gachaLB.player_backups = filtered;
+          gachaLB._backup_ts = Date.now();
+          // Tag→name maps — web panel can't import config.js so we ship lookup tables
+          const trailMap = {};
+          for (const p of PT_POOL) trailMap[p.tag] = p.name;
+          gachaLB._trail_names = trailMap;
+          const fxMap = {};
+          const _fk = (id) => Array.isArray(id) ? JSON.stringify(id) : id;
+          for (const e of COMBAT_CFG.KILL_EFFECTS) fxMap[_fk(e.id)] = e.name;
+          gachaLB._fx_names = fxMap;
+        }
+      }
     } catch (e) {
       console.warn(`[LB-Sync] backup build FAILED: ${e?.message || e}`);
-      gachaLB.player_backups = [];
-      gachaLB._backup_ts = Date.now();
       gachaLB._backup_err = String(e?.message || e).slice(0, 100);
     }
 

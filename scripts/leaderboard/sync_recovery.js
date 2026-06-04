@@ -7,6 +7,7 @@ import { HttpRequest, HttpRequestMethod, HttpHeader } from "@minecraft/server-ne
 import { SUPABASE_URL, SUPABASE_KEY, isOfflineMode, isCircuitOpen, httpWithTimeout } from "./sync_http.js";
 import { parseImportString, applyImport, applyImportOffline } from "../gacha/utils/export.js";
 import { dpGetChunked } from "./sync_dp.js";
+import { isBackupSafe, unlockBackup } from "./sync_world_guard.js";
 
 const RECOVERY_EP = `${SUPABASE_URL}/rest/v1/recovery_queue`;
 const _doneIds = new Set();
@@ -29,7 +30,11 @@ export async function pollRecoveryQueue() {
 
   try {
     const rows = await _fetchPending();
-    if (!rows || rows.length === 0) return;
+    if (!rows || rows.length === 0) {
+      // Queue drained — if world guard was blocking backup, unlock it now
+      if (!isBackupSafe()) unlockBackup();
+      return;
+    }
     for (const row of rows) await _processRecovery(row);
 
     if (_doneIds.size > DONE_CAP) {
