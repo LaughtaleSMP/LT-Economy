@@ -28,9 +28,11 @@ import { updateDynamicPricing, updateEcoPolicy, updateStagflation, cleanupLegacy
 import { pushMetricsHistory, pushEcoHistory } from "./sync_history.js";
 import { buildFeatureGuide } from "./sync_guide.js";
 import { buildExportAll } from "../gacha/utils/export.js";
+import { PT_POOL } from "../gacha/config.js";
+import { CFG as COMBAT_CFG } from "../Combat/config.js";
 
-// Re-export topup poller for main.js entry point
 export { pollTopupQueue } from "./sync_topup.js";
+export { pollRecoveryQueue } from "./sync_recovery.js";
 
 // ── Sync state ──────────────────────────────────────────────
 let _syncing = false;
@@ -79,13 +81,45 @@ export async function syncLeaderboard() {
 
     _attachFeatureGuide(gachaLB);
 
-    // Piggyback player backup onto gacha payload for web recovery panel
+    // Skip players without paid assets — save Supabase payload size
     try {
       const backups = buildExportAll();
-      if (backups.length > 0) {
-        gachaLB.player_backups = backups.map(b => ({ id: b.id, name: b.name, data: b.str, online: b.isOnline }));
+      const filtered = [];
+      for (const b of backups) {
+        const parts = b.str.split('|');
+        let gem = 0, pt = '', kfx = '';
+        for (let i = 1; i < parts.length; i++) {
+          const ci = parts[i].indexOf(':');
+          if (ci < 0) continue;
+          const k = parts[i].slice(0, ci), v = parts[i].slice(ci + 1);
+          if (k === 'gem') gem = parseInt(v, 10) || 0;
+          else if (k === 'pt') pt = v;
+          else if (k === 'kfx') kfx = v;
+        }
+        if (gem > 0 || pt || kfx) {
+          filtered.push({
+            id: b.id, name: b.name, data: b.str, online: b.isOnline,
+            gem, trails: pt ? pt.split(',').filter(Boolean) : [],
+            killfx: kfx ? kfx.split(',').filter(Boolean) : [],
+          });
+        }
       }
-    } catch (e) { console.warn("[LB-Sync] backup build:", e.message); }
+      gachaLB.player_backups = filtered;
+      gachaLB._backup_ts = Date.now();
+      // Tag→name maps — web panel can't import config.js so we ship lookup tables
+      const trailMap = {};
+      for (const p of PT_POOL) trailMap[p.tag] = p.name;
+      gachaLB._trail_names = trailMap;
+      const fxMap = {};
+      const _fk = (id) => Array.isArray(id) ? JSON.stringify(id) : id;
+      for (const e of COMBAT_CFG.KILL_EFFECTS) fxMap[_fk(e.id)] = e.name;
+      gachaLB._fx_names = fxMap;
+    } catch (e) {
+      console.warn(`[LB-Sync] backup build FAILED: ${e?.message || e}`);
+      gachaLB.player_backups = [];
+      gachaLB._backup_ts = Date.now();
+      gachaLB._backup_err = String(e?.message || e).slice(0, 100);
+    }
 
     const logs = _readEconLogs();
     const discCodes = dpGet("disc_codes", {});
