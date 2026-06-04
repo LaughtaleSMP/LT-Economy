@@ -28,6 +28,7 @@ import { updateDynamicPricing, updateEcoPolicy, updateStagflation, cleanupLegacy
 import { pushMetricsHistory, pushEcoHistory } from "./sync_history.js";
 import { buildFeatureGuide } from "./sync_guide.js";
 import { buildExportAll } from "../gacha/utils/export.js";
+import { getKillFx } from "../kill_fx.js";
 import { PT_POOL } from "../gacha/config.js";
 import { CFG as COMBAT_CFG } from "../Combat/config.js";
 
@@ -87,20 +88,24 @@ export async function syncLeaderboard() {
       const filtered = [];
       for (const b of backups) {
         const parts = b.str.split('|');
-        let gem = 0, pt = '', kfx = '';
+        let gem = 0, pt = '';
         for (let i = 1; i < parts.length; i++) {
           const ci = parts[i].indexOf(':');
           if (ci < 0) continue;
           const k = parts[i].slice(0, ci), v = parts[i].slice(ci + 1);
           if (k === 'gem') gem = parseInt(v, 10) || 0;
           else if (k === 'pt') pt = v;
-          else if (k === 'kfx') kfx = v;
         }
-        if (gem > 0 || pt || kfx) {
+        // Read killfx directly — avoids corrupting array IDs via naive split
+        const kfx = getKillFx(b.id);
+        const kfxOwned = (kfx.owned || []).filter(o => o !== "Games:coins" && o !== "none");
+        const kfxKeys = kfxOwned.map(o => Array.isArray(o) ? JSON.stringify(o) : o);
+
+        if (gem > 0 || pt || kfxKeys.length > 0) {
           filtered.push({
             id: b.id, name: b.name, data: b.str, online: b.isOnline,
             gem, trails: pt ? pt.split(',').filter(Boolean) : [],
-            killfx: kfx ? kfx.split(',').filter(Boolean) : [],
+            killfx: kfxKeys,
           });
         }
       }
