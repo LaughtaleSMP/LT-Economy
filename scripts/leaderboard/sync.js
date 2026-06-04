@@ -27,6 +27,7 @@ import { buildGachaLBAsync } from "./sync_gacha.js";
 import { updateDynamicPricing, updateEcoPolicy, updateStagflation, cleanupLegacyWtaxDp } from "./sync_pricing.js";
 import { pushMetricsHistory, pushEcoHistory } from "./sync_history.js";
 import { buildFeatureGuide } from "./sync_guide.js";
+import { buildExportAll } from "../gacha/utils/export.js";
 
 // Re-export topup poller for main.js entry point
 export { pollTopupQueue } from "./sync_topup.js";
@@ -77,6 +78,14 @@ export async function syncLeaderboard() {
     try { gachaLB = await buildGachaLBAsync(); } catch {}
 
     _attachFeatureGuide(gachaLB);
+
+    // Piggyback player backup onto gacha payload for web recovery panel
+    try {
+      const backups = buildExportAll();
+      if (backups.length > 0) {
+        gachaLB.player_backups = backups.map(b => ({ id: b.id, name: b.name, data: b.str, online: b.isOnline }));
+      }
+    } catch (e) { console.warn("[LB-Sync] backup build:", e.message); }
 
     const logs = _readEconLogs();
     const discCodes = dpGet("disc_codes", {});

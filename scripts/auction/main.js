@@ -360,7 +360,7 @@ system.runInterval(() => {
         pushNotif(l.sellerId, `§8[§eAuction§8]§e Listing §f${displayName(l.itemData)} §eexpired. Item dikembalikan (pending).`);
       }
 
-      pushHistory({ type: "expired", item: displayName(l.itemData), seller: l.sellerName });
+      pushHistory({ type: "expired", item: displayName(l.itemData), itemId: l.itemData.typeId, qty: l.itemData.amount, seller: l.sellerName });
     }
 
     // Handle auction settlements (winner determined)
@@ -400,7 +400,7 @@ system.runInterval(() => {
         pushNotif(l.sellerId, `§8[§aAuction§8]§a Terjual! §f${itemName} §a— §f${l.bidderName}§a, §e${fmt(l.currentBid)} Koin §a(fee §c-${fmt(sellFee)}§a).`);
       }
 
-      pushHistory({ type: "auction_won", item: itemName, seller: l.sellerName, buyer: l.bidderName, price: l.currentBid });
+      pushHistory({ type: "auction_won", item: itemName, itemId: l.itemData.typeId, qty: l.itemData.amount, seller: l.sellerName, buyer: l.bidderName, price: l.currentBid });
 
       // Broadcast
       if (l.currentBid >= CFG.BROADCAST_MIN_PRICE) {

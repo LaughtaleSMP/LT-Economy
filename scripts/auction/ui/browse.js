@@ -250,7 +250,7 @@ async function executeBuyout(buyer, listingId) {
       }
     } else { pushNotif(l.sellerId, `§8[§aAuction§8]§a Item §f${displayName(l.itemData)} §aterjual §e${fmt(l.price)} Koin §a(fee §c-${fmt(sellFee)}§a) oleh §f${buyer.name}§a!`); addPendingCoin(l.sellerId, sellerPayout); }
     updateListing(listingId, x => { x.status = "sold"; x.buyerName = buyer.name; x.buyerId = buyer.id; });
-    pushHistory({ type: "sold", item: displayName(l.itemData), seller: l.sellerName, buyer: buyer.name, price: l.price });
+    pushHistory({ type: "sold", item: displayName(l.itemData), itemId: l.itemData.typeId, qty: l.itemData.amount, seller: l.sellerName, buyer: buyer.name, price: l.price });
     clearTx(buyer.id);
     return { ok: true, price: l.price, itemName: displayName(l.itemData), gave, sellerName: l.sellerName, hasEnch: l.itemData.enchantments?.length > 0 };
   });

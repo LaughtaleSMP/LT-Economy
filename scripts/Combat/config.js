@@ -18,8 +18,17 @@ export const CFG = Object.freeze({
   K_OFFENSE:           "co:",
 
   // Tier penalties — index = offenseCount - 1
-  // HUKUMAN BERAT: membunuh player non-PvP = tindakan kriminal berat
+  // Tier 0 = edukasi. Tier 1+ = hukuman eskalasi.
   OFFENSE_TIERS: [
+    // Tier 0: Warning edukasi — debuff ringan, tanpa denda/drop
+    { penalty: 0,
+      victimRefundPct: 0,
+      debuff: { effects: ["slowness 30 1 true", "mining_fatigue 30 1 true"], msg: "§e  Debuff: §7Slow+Fatigue 30 detik" },
+      dropInventory: false,
+      tempbanMs: 0,
+      permaban: false,
+      label: "§e[WARNING] Jangan bunuh player non-PvP!" },
+
     // Tier 1: Denda + debuff + DROP INVENTORY
     { penalty: 5_000,
       victimRefundPct: 100,
@@ -58,6 +67,11 @@ export const CFG = Object.freeze({
     { min: 10, mult: 3.0 },
   ],
   STREAK_DECAY_MS:      600_000,
+  SESSION_EARN_CAP:     5_000,
+
+  // ── Anti-alt farming ──
+  MIN_VICTIM_ONLINE_MS: 300_000,    // Victim harus online >= 5 menit
+  ALT_FARM_PENALTY:     50_000,     // Denda maksimal jika terdeteksi
 
   COMBAT_TAG_TICKS:     300,
   PVP_AUTO_OFF_TICKS:   600,

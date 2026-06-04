@@ -1,3 +1,5 @@
+// SLO: Penalty success >= 99.9%. Kill reward atomic >= 99.9%.
+//      Failure -> console.warn, no crash. Max 3 intervals.
 import { world, system, CommandPermissionLevel } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { CFG } from "./config.js";
@@ -79,6 +81,8 @@ const pvpActivePlayers = new Set();
 const _warnCooldown = new Map();
 const lastAttacker = new Map();
 const _pvpHitSpam = new Map();
+const _victimKillCD = new Map();
+const playerJoinTime = new Map();
 
 const combatStatsCache = new Map();
 const combatStatsDirty = new Set();
@@ -427,7 +431,7 @@ function _getFxOwnerCount(fxId) {
 function _incrementFxOwnerCount(fxId) {
   const key = `fxoc:${_fxIdKey(fxId)}`;
   const cur = Number(world.getDynamicProperty(key) ?? 0);
-  try { world.setDynamicProperty(key, cur + 1); } catch {}
+  try { world.setDynamicProperty(key, cur + 1); } catch { }
   return cur + 1;
 }
 
@@ -530,7 +534,7 @@ async function _handleFxPurchase(player, sel) {
   }
   if (!deductOk) {
     // Safe refund token
-    if (needToken > 0) try { addToken(player, needToken); } catch {}
+    if (needToken > 0) try { addToken(player, needToken); } catch { }
     player.sendMessage(`§d[KillFX] §cGagal memproses pembelian.`); return false;
   }
 
@@ -550,7 +554,7 @@ async function _handleFxPurchase(player, sel) {
   // Social Proof broadcast — Cialdini principle (real DP-backed count)
   const ownerCount = _incrementFxOwnerCount(sel.eff.id);
   world.sendMessage(
-    `\n§8[§d✦ KillFX§8] §a${player.name} §7membeli §d${sel.eff.name}§7!` +
+    `\n§8[§dKillFX§8] §a${player.name} §7membeli §d${sel.eff.name}§7!` +
     (isGem ? ` §b(${fmt(sel.eff.cost)} ✦Gem)` : ` §e(${fmt(sel.eff.cost)} ⛃Koin)`) +
     (needToken > 0 ? ` §6+${needToken}◆` : "") +
     `\n§8  └ §7Total pemilik: §a${ownerCount} player §8│ ` +
@@ -713,11 +717,11 @@ world.afterEvents.entityHurt.subscribe(ev => {
       try {
         const h = victim.getComponent("minecraft:health");
         if (h) h.setCurrentValue(Math.min(h.currentValue + ev.damage, h.effectiveMax));
-      } catch {}
+      } catch { }
       // Extinguish fire — must be deferred (afterEvents is read-only)
       system.run(() => {
-        try { victim.extinguishFire(false); } catch {}
-        try { victim.runCommand("effect @s fire_resistance 3 255 true"); } catch {}
+        try { victim.extinguishFire(false); } catch { }
+        try { victim.runCommand("effect @s fire_resistance 3 255 true"); } catch { }
       });
     }
     return;
@@ -738,8 +742,8 @@ world.afterEvents.entityHurt.subscribe(ev => {
   const protectFromFire = () => {
     _nonPvpFireProtected.set(victim.id, system.currentTick);
     system.run(() => {
-      try { victim.extinguishFire(false); } catch {}
-      try { victim.runCommand("effect @s fire_resistance 3 255 true"); } catch {}
+      try { victim.extinguishFire(false); } catch { }
+      try { victim.runCommand("effect @s fire_resistance 3 255 true"); } catch { }
     });
   };
 
@@ -750,8 +754,8 @@ world.afterEvents.entityHurt.subscribe(ev => {
   if (!atkPvP && !pvpActivePlayers.has(attacker.id)) {
     const coin = getCoin(attacker);
     if (coin >= CFG.MIN_COIN_TO_ENABLE
-        && !isInProtectedLand(attacker)
-        && !isInProtectedLand(victim)) {
+      && !isInProtectedLand(attacker)
+      && !isInProtectedLand(victim)) {
       pvpActivePlayers.add(attacker.id);
       atkPvP = true;
 
@@ -770,20 +774,20 @@ world.afterEvents.entityHurt.subscribe(ev => {
         combatTagUntil.set(victim.id, Math.max(combatTagUntil.get(victim.id) ?? 0, ctTick));
         pvpActiveUntil.set(victim.id, now + CFG.PVP_AUTO_OFF_TICKS);
         system.run(() => {
-          try { attacker.addTag(CFG.PVP_TAG); } catch {}
+          try { attacker.addTag(CFG.PVP_TAG); } catch { }
           sfx(attacker, SFX.TOGGLE_ON);
-          try { attacker.sendMessage(`§8[§cPvP§8]§c §e⚔ PvP aktif! §7Pertarungan dimulai.`); } catch {}
-          try { victim.sendMessage(`§8[§cPvP§8]§c §f${attacker.name} §emulai melawanmu!`); } catch {}
+          try { attacker.sendMessage(`§8[§cPvP§8]§c §ePvP aktif! §7Pertarungan dimulai.`); } catch { }
+          try { victim.sendMessage(`§8[§cPvP§8]§c §f${attacker.name} §emulai melawanmu!`); } catch { }
         });
         return;
       } else {
         healBack();
         protectFromFire();
         system.run(() => {
-          try { attacker.addTag(CFG.PVP_TAG); } catch {}
+          try { attacker.addTag(CFG.PVP_TAG); } catch { }
           sfx(attacker, SFX.TOGGLE_ON);
-          try { attacker.sendMessage(`§8[§cPvP§8]§c §e⚔ PvP aktif! §7Menunggu lawan membalas.`); } catch {}
-          try { victim.sendMessage(`§8[§cPvP§8]§c §f${attacker.name} §7menantangmu! §ePukul balik §7untuk melawan.`); } catch {}
+          try { attacker.sendMessage(`§8[§cPvP§8]§c §ePvP aktif! §7Menunggu lawan membalas.\n§8  Auto-off dalam §f${Math.floor(CFG.PVP_AUTO_OFF_TICKS / 20)}s §8jika tidak ada respon.`); } catch { }
+          try { victim.sendMessage(`§8[§cPvP§8]§c §f${attacker.name} §7menantangmu! §ePukul balik §7untuk melawan.`); } catch { }
         });
         return;
       }
@@ -797,7 +801,7 @@ world.afterEvents.entityHurt.subscribe(ev => {
         healBack();
         protectFromFire();
         system.run(() => {
-          try { attacker.sendMessage(`§8[§cPvP§8]§c §7Koin kurang! Minimal §e${fmt(CFG.MIN_COIN_TO_ENABLE)} Koin`); } catch {}
+          try { attacker.sendMessage(`§8[§cPvP§8]§c §7Koin kurang! Minimal §e${fmt(CFG.MIN_COIN_TO_ENABLE)} Koin`); } catch { }
         });
       }
       return;
@@ -807,31 +811,6 @@ world.afterEvents.entityHurt.subscribe(ev => {
   if (!atkPvP || !vicPvP) {
     healBack();
     protectFromFire();
-
-    // ── Auto-enable victim: attacker sudah PvP, victim belum ──
-    if (atkPvP && !vicPvP && !pvpActivePlayers.has(victim.id)) {
-      const vicCoin = getCoin(victim);
-      if (vicCoin >= CFG.MIN_COIN_TO_ENABLE
-          && !isInProtectedLand(attacker)
-          && !isInProtectedLand(victim)) {
-        pvpActivePlayers.add(victim.id);
-        const now = system.currentTick;
-        pvpActiveUntil.set(victim.id, now + CFG.PVP_AUTO_OFF_TICKS);
-        combatTagUntil.set(victim.id, Math.max(combatTagUntil.get(victim.id) ?? 0, now + CFG.COMBAT_TAG_TICKS));
-        combatTagUntil.set(attacker.id, Math.max(combatTagUntil.get(attacker.id) ?? 0, now + CFG.COMBAT_TAG_TICKS));
-        pvpActiveUntil.set(attacker.id, now + CFG.PVP_AUTO_OFF_TICKS);
-        lastAttacker.set(victim.id, { id: attacker.id, name: attacker.name, tick: now });
-        _nonPvpFireProtected.delete(victim.id);
-        _pvpHitSpam.delete(attacker.id);
-        system.run(() => {
-          try { victim.addTag(CFG.PVP_TAG); } catch {}
-          sfx(victim, SFX.TOGGLE_ON);
-          try { victim.sendMessage(`§8[§cPvP§8]§c §e⚔ PvP otomatis aktif! §f${attacker.name} §7menyerangmu.`); } catch {}
-          try { attacker.sendMessage(`§8[§cPvP§8]§c §f${victim.name} §7sekarang bisa dilawan!`); } catch {}
-        });
-        return;
-      }
-    }
 
     // ── Hit spam detection ──
     const atkId = attacker.id;
@@ -847,7 +826,7 @@ world.afterEvents.entityHurt.subscribe(ev => {
       const kickName = attacker.name;
       const kickVictimName = victim.name;
       system.run(() => {
-        try { world.sendMessage(`§8[§4PvP§8]§4 §f${kickName} §cdikick: spam attack §f${kickVictimName}`); } catch {}
+        try { world.sendMessage(`§8[§4PvP§8]§4 §f${kickName} §cdikick: spam attack §f${kickVictimName}`); } catch { }
         system.runTimeout(() => {
           kickPlayer(kickName, `§cDikick: spam attack player`);
         }, 10);
@@ -859,7 +838,7 @@ world.afterEvents.entityHurt.subscribe(ev => {
     if (hs.count === 5 || hs.count === 10 || hs.count === 13) {
       const remain = CFG.ILLEGAL_HIT_KICK_COUNT - hs.count;
       system.run(() => {
-        try { attacker.sendMessage(`§8[§4PvP§8]§4 §cStop! §7Hit: §f${hs.count}/${CFG.ILLEGAL_HIT_KICK_COUNT} §8— sisa ${remain} sebelum kick`); } catch {}
+        try { attacker.sendMessage(`§8[§4PvP§8]§4 §cStop! §7Hit: §f${hs.count}/${CFG.ILLEGAL_HIT_KICK_COUNT} §8— sisa ${remain} sebelum kick`); } catch { }
       });
     }
     // Warning biasa — HANYA SEKALI per 10 detik per pasangan
@@ -872,7 +851,7 @@ world.afterEvents.entityHurt.subscribe(ev => {
             if (atkPvP) {
               victim.sendMessage(`§8[§cPvP§8]§c §f${attacker.name} §7menantangmu! §ePukul balik §7untuk melawan.`);
             }
-          } catch {}
+          } catch { }
         });
       }
     }
@@ -887,7 +866,7 @@ world.afterEvents.entityHurt.subscribe(ev => {
     const nowMs = Date.now();
     if (nowMs - (_warnCooldown.get(landWarnKey) ?? 0) >= 5000) {
       _warnCooldown.set(landWarnKey, nowMs);
-      system.run(() => { try { attacker.sendMessage(`§8[§ePvP§8]§e §7Area land — PvP dinonaktifkan.`); } catch {} });
+      system.run(() => { try { attacker.sendMessage(`§8[§ePvP§8]§e §7Area land — PvP dinonaktifkan.`); } catch { } });
     }
     return;
   }
@@ -966,22 +945,40 @@ world.afterEvents.entityDie.subscribe(ev => {
     const tier = CFG.OFFENSE_TIERS[tierIdx];
     const totalTiers = CFG.OFFENSE_TIERS.length;
 
-    // ── Hitung denda (flat — koin bisa minus/hutang) ──
+    // ── Hitung denda — clamp agar saldo tidak negatif ──
     const atkCoin = getCoin(attacker);
-    const penalty = tier.penalty;
+    const penalty = tier.penalty > 0 ? Math.min(tier.penalty, Math.max(0, atkCoin)) : 0;
     // [§2] Track flow only if scoreboard write actually succeeded.
-    if (!setCoin(attacker, atkCoin - penalty)) {
-      console.warn(`[Combat] penalty failed: attacker=${attacker.name} penalty=${penalty}`);
-      // Skip downstream effects — punishment didn't actually apply.
-      return;
+    if (penalty > 0) {
+      if (!setCoin(attacker, atkCoin - penalty)) {
+        console.warn(`[Combat] penalty failed: attacker=${attacker.name} penalty=${penalty}`);
+        return;
+      }
+      trackFlow("pvp_penalty", -penalty);
     }
-    trackFlow("pvp_penalty", -penalty);
 
-    // ── Kompensasi korban ──
+    // ── Kompensasi korban (atomic — di luar system.run) ──
     let refund = 0;
     if (tier.victimRefundPct > 0 && penalty > 0) {
       refund = Math.floor(penalty * tier.victimRefundPct / 100);
+      if (refund > 0) {
+        const vicCoin = getCoin(victim);
+        if (!setCoin(victim, vicCoin + refund)) {
+          // Rollback attacker penalty
+          setCoin(attacker, getCoin(attacker) + penalty);
+          console.warn(`[Combat] refund failed, penalty rolled back: victim=${victim.name}`);
+          refund = 0;
+        } else {
+          trackFlow("pvp_refund", refund);
+        }
+      }
     }
+
+    // ── Defer pesan ke korban via cdm: (victim mungkin dead) ──
+    dp.set("cdm:" + victim.id, {
+      killer: attacker.name, lost: 0, refund, illegal: true,
+      penaltyAmount: tier.penalty, ts: now,
+    });
 
     system.run(() => {
       sfx(attacker, SFX.DEATH);
@@ -990,33 +987,13 @@ world.afterEvents.entityDie.subscribe(ev => {
       attacker.sendMessage(
         `§8[§4PvP§8]§4 ${tier.label}\n` +
         `§cKamu membunuh §f${victim.name} §c${!atkPvP ? "tanpa PvP aktif" : "yang PvP-nya nonaktif"}!\n` +
-        `§c  Denda: §e-${fmt(penalty)} Koin\n` +
+        (penalty > 0 ? `§c  Denda: §e-${fmt(penalty)} Koin\n` : "") +
         `§c  Pelanggaran: §f${offenseCount} §8(Tier ${tierIdx + 1}/${totalTiers})\n` +
         (tier.debuff ? `${tier.debuff.msg}\n` : "") +
         (tier.dropInventory ? `§4  INVENTORY DIJATUHKAN!\n` : "") +
         (tier.tempbanMs > 0 ? `§4  TEMPBAN: §f${Math.floor(tier.tempbanMs / 60000)} menit!\n` : "") +
         `§7  Saldo: §e${fmt(getCoin(attacker))} Koin`
       );
-
-      // ── Pesan ke korban ──
-      try {
-        victim.sendMessage(
-          `§8[§ePvP§8]§e §f${attacker.name} §cmembunuhmu secara ilegal!\n` +
-          `§a  Pelaku didenda §e${fmt(penalty)} Koin\n` +
-          (refund > 0 ? `§a  Kompensasi: §e+${fmt(refund)} Koin\n` : "") +
-          (tier.dropInventory ? `§a  Inventory pelaku dijatuhkan!\n` : "") +
-          `§7  Koinmu tidak terpengaruh.`
-        );
-      } catch {}
-
-      // ── Beri kompensasi ke korban ──
-      if (refund > 0) {
-        if (setCoin(victim, getCoin(victim) + refund)) {
-          trackFlow("pvp_refund", refund);
-        } else {
-          console.warn(`[Combat] refund failed: victim=${victim.name} refund=${refund}`);
-        }
-      }
 
       // ── Broadcast ──
       world.sendMessage(
@@ -1027,7 +1004,7 @@ world.afterEvents.entityDie.subscribe(ev => {
       // ── Debuff (tier 1-3) ──
       if (tier.debuff) {
         for (const eff of tier.debuff.effects) {
-          try { attacker.runCommand(`effect @s ${eff}`); } catch {}
+          try { attacker.runCommand(`effect @s ${eff}`); } catch { }
         }
       }
 
@@ -1047,7 +1024,7 @@ world.afterEvents.entityDie.subscribe(ev => {
                 inv.setItem(i);
                 try { dim.spawnItem(item, { x: loc.x, y: loc.y, z: loc.z }); }
                 catch (e) { console.warn(`[Combat] drop spawn fail slot=${i}:`, e); }
-              } catch {}
+              } catch { }
             }
           }
           // Drop armor juga
@@ -1063,11 +1040,11 @@ world.afterEvents.entityDie.subscribe(ev => {
                 eq.setEquipment(slot);
                 try { dim.spawnItem(item, { x: loc.x, y: loc.y, z: loc.z }); }
                 catch (e) { console.warn(`[Combat] drop spawn fail slot=${slot}:`, e); }
-              } catch {}
+              } catch { }
             }
           }
-        } catch {}
-        try { attacker.sendMessage(`§4§l  ⚠ SEMUA ITEM DAN ARMOR DIJATUHKAN!`); } catch {}
+        } catch { }
+        try { attacker.sendMessage(`§4§l  ⚠ SEMUA ITEM DAN ARMOR DIJATUHKAN!`); } catch { }
       }
 
       // ── Tempban ──
@@ -1098,6 +1075,12 @@ world.afterEvents.entityDie.subscribe(ev => {
   }
 
   const now = Date.now();
+
+  // ── Victim-side kill CD — prevent alt/multi-account farming ──
+  if (now - (_victimKillCD.get(victim.id) ?? 0) < 30_000) {
+    system.run(() => attacker.sendMessage(`§8[§ePvP§8]§e §f${victim.name} §7baru saja mati. Tunggu sebentar.`));
+    return;
+  }
   const pairKey = `${attacker.id}:${victim.id}`;
   if (now - (killCooldown.get(pairKey) ?? 0) < CFG.KILL_CD_MS) {
     system.run(() => attacker.sendMessage(`§8[§ePvP§8]§e Kill cooldown! §7Tunggu sebelum farm §f${victim.name}`));
@@ -1109,14 +1092,77 @@ world.afterEvents.entityDie.subscribe(ev => {
   }
   killCooldown.set(pairKey, now);
   globalKillCD.set(attacker.id, now);
+  _victimKillCD.set(victim.id, now);
 
   const atkStats = getStats(attacker.id);
   const prevStreak = (now - (atkStats.lastKillTs || 0) > CFG.STREAK_DECAY_MS) ? 0 : atkStats.streak;
 
+  // ── Session earn cap — prevent whale farming (§5.2) ──
+  const _earnCapped = atkStats.earned >= CFG.SESSION_EARN_CAP;
+
+  // ── Anti-alt farming: victim harus online >= 5 menit ──
+  const vicOnlineMs = Date.now() - (playerJoinTime.get(victim.id) ?? Date.now());
+  if (vicOnlineMs < CFG.MIN_VICTIM_ONLINE_MS) {
+    // Hukuman berat — denda maksimal + drop inventory
+    const atkCoin = getCoin(attacker);
+    const altPenalty = Math.min(CFG.ALT_FARM_PENALTY, Math.max(0, atkCoin));
+    if (altPenalty > 0) {
+      if (setCoin(attacker, atkCoin - altPenalty)) {
+        trackFlow("pvp_alt_farm_penalty", -altPenalty);
+      }
+    }
+    // Drop inventory
+    system.run(() => {
+      try {
+        const inv = attacker.getComponent("minecraft:inventory")?.container;
+        if (inv) {
+          const loc = attacker.location;
+          const dim = attacker.dimension;
+          for (let i = 0; i < inv.size; i++) {
+            try {
+              const item = inv.getItem(i);
+              if (!item) continue;
+              inv.setItem(i);
+              try { dim.spawnItem(item, { x: loc.x, y: loc.y, z: loc.z }); } catch { }
+            } catch { }
+          }
+        }
+        const eq = attacker.getComponent("minecraft:equippable");
+        if (eq) {
+          for (const slot of ["Head", "Chest", "Legs", "Feet", "Offhand"]) {
+            try {
+              const item = eq.getEquipment(slot);
+              if (!item) continue;
+              eq.setEquipment(slot);
+              try { attacker.dimension.spawnItem(item, attacker.location); } catch { }
+            } catch { }
+          }
+        }
+      } catch { }
+      attacker.sendMessage(
+        `§8[§4PvP§8]§4 §c⚠ ALT FARMING TERDETEKSI!\n` +
+        `§cKorban baru online §f${Math.floor(vicOnlineMs / 1000)}s §c(min ${Math.floor(CFG.MIN_VICTIM_ONLINE_MS / 60000)} menit)\n` +
+        (altPenalty > 0 ? `§c  Denda: §e-${fmt(altPenalty)} Koin\n` : "") +
+        `§4  INVENTORY DIJATUHKAN!\n` +
+        `§7  Saldo: §e${fmt(getCoin(attacker))} Koin`
+      );
+      sfx(attacker, SFX.DEATH);
+      world.sendMessage(`§8[§4PvP§8]§4 §f${attacker.name} §cterdeteksi alt farming! Denda §e${fmt(altPenalty)} Koin`);
+    });
+    // Refund victim — kembalikan koin yang hilang (0 karena belum dipotong)
+    dp.set("cdm:" + victim.id, { killer: attacker.name, lost: 0, refund: 0, illegal: true, penaltyAmount: altPenalty, ts: Date.now() });
+    // Tetap catat death untuk victim
+    const vicStats = getStats(victim.id);
+    vicStats.deaths++;
+    setStats(victim.id, vicStats);
+    return;
+  }
+
   const victimCoins = getCoin(victim);
   const attackerCoins = getCoin(attacker);
   let actualGain = 0, actualLoss = 0;
-  if (victimCoins > 0) {
+  // Guard: no transfer if earn capped, victim has no coins, or victim coins negative
+  if (victimCoins > 0 && !_earnCapped) {
     const mult = getStreakMult(prevStreak);
     let reward = Math.floor(victimCoins * CFG.KILL_REWARD_PCT / 100 * mult);
     reward = Math.min(CFG.MAX_REWARD, Math.max(CFG.MIN_REWARD, reward));
@@ -1172,14 +1218,16 @@ world.afterEvents.entityDie.subscribe(ev => {
       spawnKillEffect(attacker);
     }
 
-    attacker.sendMessage(`§8[§aPvP§8]§a §c>> §fKamu membunuh §c${victim.name}!\n§a  +${fmt(actualGain)} Koin${streakBonus}\n§7  Saldo: §e${fmt(getCoin(attacker))} Koin`);
+    let killMsg = `§8[§aPvP§8]§a §c>> §fKamu membunuh §c${victim.name}!\n§a  +${fmt(actualGain)} Koin${streakBonus}\n§7  Saldo: §e${fmt(getCoin(attacker))} Koin`;
+    if (_earnCapped) killMsg += `\n§e  [Earning cap — tidak dapat koin]`;
+    attacker.sendMessage(killMsg);
     // Kill feed with FX name — awareness trigger untuk KillFX
     const fxTag = (_atkFx.active && _atkFx.active !== "Games:coins" && _atkFx.active !== "none")
       ? ` §8│ §d${_atkFxName}` : "";
     if (atkStats.streak >= 3) {
-      world.sendMessage(`  §c✦ §f${attacker.name} §7⚔ §f${victim.name} §e+${fmt(actualGain)}${fxTag}${streakBonus}`);
+      world.sendMessage(`  §c§f${attacker.name} §f${victim.name} §e+${fmt(actualGain)}${fxTag}${streakBonus}`);
     } else if (actualGain > 0) {
-      world.sendMessage(`  §c✦ §f${attacker.name} §7⚔ §f${victim.name} §e+${fmt(actualGain)}${fxTag}`);
+      world.sendMessage(`  §c§f${attacker.name} §f${victim.name} §e+${fmt(actualGain)}${fxTag}`);
     }
   });
 
@@ -1188,6 +1236,7 @@ world.afterEvents.entityDie.subscribe(ev => {
 
 world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
   if (isPvPOn(player)) pvpActivePlayers.add(player.id);
+  if (!playerJoinTime.has(player.id)) playerJoinTime.set(player.id, Date.now());
 
   system.runTimeout(() => {
     // ── Tempban enforcement — kick jika masih dalam masa ban ──
@@ -1210,25 +1259,37 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
       const cur = getCoin(player);
       const loss = Math.min(debt, cur);
       if (loss > 0) {
-        // [§2] Apply penalty FIRST, then clear debt — atomic ordering.
+        // [§2] Apply penalty FIRST, then update debt — atomic ordering.
         if (setCoin(player, cur - loss)) {
-          dp.del(CFG.K_DEBT + player.id);
+          const remaining = debt - loss;
+          if (remaining > 0) dp.set(CFG.K_DEBT + player.id, remaining);
+          else dp.del(CFG.K_DEBT + player.id);
           trackFlow("pvp_penalty", -loss);
         } else {
           console.warn(`[Combat] debt-apply failed: keep debt=${debt} for ${player.name}`);
         }
       } else {
-        // No coin to deduct — clear debt anyway (can't enforce)
-        dp.del(CFG.K_DEBT + player.id);
+        // Debt persist — jangan hapus, tunggu sampai punya koin
+        player.sendMessage(`§8[§cPvP§8]§c §7Hutang §e${fmt(debt)} \u26c3 §7belum lunas (koin 0).`);
       }
-      player.sendMessage(`§8[§cPvP§8]§c §4Combat Log Penalty!\n§c  -${fmt(loss)} \u26c3 §7(disconnect saat combat)\n§7  Saldo: §e${fmt(getCoin(player))} \u26c3`);
-      sfx(player, SFX.DEATH);
+      if (loss > 0) {
+        player.sendMessage(`§8[§cPvP§8]§c §4Combat Log Penalty!\n§c  -${fmt(loss)} \u26c3 §7(disconnect saat combat)\n§7  Saldo: §e${fmt(getCoin(player))} \u26c3`);
+        sfx(player, SFX.DEATH);
+      }
     }
     const deathMsg = dp.get("cdm:" + player.id, null);
     if (deathMsg) {
       dp.del("cdm:" + player.id);
       sfx(player, SFX.DEATH);
-      player.sendMessage(`§8[§cPvP§8]§c §fDibunuh oleh §c${deathMsg.killer}!\n§c  -${fmt(deathMsg.lost)} \u26c3\n§7  Saldo: §e${fmt(getCoin(player))} \u26c3`);
+      if (deathMsg.illegal) {
+        let ilMsg = `§8[§ePvP§8]§e §f${deathMsg.killer} §cmembunuhmu secara ilegal!`;
+        if (deathMsg.penaltyAmount > 0) ilMsg += `\n§a  Pelaku didenda §e${fmt(deathMsg.penaltyAmount)} Koin`;
+        if (deathMsg.refund > 0) ilMsg += `\n§a  Kompensasi: §e+${fmt(deathMsg.refund)} Koin`;
+        ilMsg += `\n§7  Saldo: §e${fmt(getCoin(player))} \u26c3`;
+        player.sendMessage(ilMsg);
+      } else {
+        player.sendMessage(`§8[§cPvP§8]§c §fDibunuh oleh §c${deathMsg.killer}!\n§c  -${fmt(deathMsg.lost)} \u26c3\n§7  Saldo: §e${fmt(getCoin(player))} \u26c3`);
+      }
     }
   }, 20);
 });
@@ -1241,7 +1302,7 @@ system.runInterval(() => {
     // ── Auto-OFF: PvP mati otomatis setelah idle ──
     const idleAt = pvpActiveUntil.get(player.id) ?? 0;
     if (idleAt > 0 && now > idleAt) {
-      try { player.removeTag(CFG.PVP_TAG); } catch {}
+      try { player.removeTag(CFG.PVP_TAG); } catch { }
       pvpActivePlayers.delete(player.id);
       pvpActiveUntil.delete(player.id);
       combatTagUntil.delete(player.id);
@@ -1249,25 +1310,12 @@ system.runInterval(() => {
       try {
         player.sendMessage(`§8[§aPvP§8]§a §7PvP otomatis nonaktif §8— tidak ada pertarungan.`);
         sfx(player, SFX.TOGGLE_OFF);
-      } catch {}
+      } catch { }
       continue;
     }
 
-    if (!isHudOn(player.id)) continue;
-    const combat = (combatTagUntil.get(player.id) ?? 0) > now;
-    const stats = getStats(player.id);
-    const coin = getCoin(player);
     const idleRemain = Math.max(0, Math.ceil((idleAt - now) / 20));
-
-    let bar;
-    if (combat) {
-      const r = Math.ceil(((combatTagUntil.get(player.id) ?? 0) - now) / 20);
-      bar = `§c>> COMBAT §4${r}s §8| §fK:§e${stats.kills} §fD:§7${stats.deaths} §8| §eK:§f${fmt(coin)} §8| §8TPS:${getTpsDisplay()}`;
-    } else {
-      const sk = stats.streak >= 3 ? ` §6x${stats.streak}` : "";
-      bar = `§e>> PvP §7${idleRemain}s §8| §fK:§e${stats.kills} §fD:§7${stats.deaths}${sk} §8| §eK:§f${fmt(coin)} §8| §8TPS:${getTpsDisplay()}`;
-    }
-    try { player.onScreenDisplay.setActionBar(bar); } catch { }
+    try { player.onScreenDisplay.setActionBar(`§cPvP §4${idleRemain}s`); } catch { }
   }
 }, CFG.HUD_INT);
 
@@ -1280,6 +1328,8 @@ system.runInterval(() => {
   for (const [k, v] of Array.from(lastAttacker)) { if (tick - v.tick > CFG.LAST_ATTACKER_TICKS * 2) lastAttacker.delete(k); }
   for (const [k, v] of Array.from(_nonPvpFireProtected)) { if (tick - v > CFG.LAST_ATTACKER_TICKS * 2) _nonPvpFireProtected.delete(k); }
   for (const [k, v] of Array.from(_pvpHitSpam)) { if (now - v.first > CFG.ILLEGAL_HIT_WINDOW_MS * 2) _pvpHitSpam.delete(k); }
+  for (const [k, v] of Array.from(_victimKillCD)) { if (now - v > 60000) _victimKillCD.delete(k); }
+  for (const [k, v] of Array.from(playerJoinTime)) { if (!getOnlinePlayer(k)) playerJoinTime.delete(k); }
   // Cleanup stale toggleCooldown & pvpActiveUntil for offline players
   for (const [k, v] of Array.from(toggleCooldown)) { if (tick - v > CFG.TOGGLE_CD_TICKS * 4) toggleCooldown.delete(k); }
   for (const [k, v] of Array.from(pvpActiveUntil)) { if (tick > v) pvpActiveUntil.delete(k); }
@@ -1367,7 +1417,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
   // Console (no sourceEntity) = admin; in-game player needs admin tag
   const isAdmin = !src || src.hasTag?.(CFG.ADMIN_TAG);
   const reply = (msg) => {
-    if (src) try { src.sendMessage(msg); } catch {}
+    if (src) try { src.sendMessage(msg); } catch { }
     console.warn(msg.replace(/\u00a7./g, ""));
   };
 
@@ -1420,6 +1470,11 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
     const p = world.getPlayers().find(pl => pl.name === target);
     if (!p) { reply(`\u00a7c[PvP] \u00a7f${target} \u00a7ctidak ditemukan.`); return; }
     const off = dp.get(CFG.K_OFFENSE + p.id, { count: 0, lastTs: 0 });
+    // Apply decay for accurate display
+    if (off.lastTs > 0 && off.count > 0) {
+      const decay = Math.floor((Date.now() - off.lastTs) / CFG.OFFENSE_DECAY_MS);
+      if (decay > 0) off.count = Math.max(0, off.count - decay);
+    }
     const ban = dp.get(CFG.K_TEMPBAN + p.id, null);
     let msg = `\u00a7a[PvP] \u00a7f${target}\u00a7a: Offense: \u00a7f${off.count}`;
     if (off.lastTs > 0) msg += ` \u00a78(last: ${Math.floor((Date.now() - off.lastTs) / 60000)}m ago)`;
@@ -1439,7 +1494,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
       setKillFx(p.id, defaultFx);
       evictKillFxCache(p.id);
       // Also clear legacy world DP if exists
-      try { world.setDynamicProperty("ckfx:" + p.id, undefined); } catch {}
+      try { world.setDynamicProperty("ckfx:" + p.id, undefined); } catch { }
       reply(`\u00a7a[KillFX] \u00a7fKillFX \u00a7f${target} \u00a7adireset ke default.`);
     } else {
       // Try offline: scan world DP for matching ckfx: key by name lookup via p_reg
@@ -1453,7 +1508,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
             // We can't verify name for offline, so inform admin
           }
         }
-      } catch {}
+      } catch { }
       reply(`\u00a7e[KillFX] \u00a7f${target} \u00a7etidak online. Untuk offline player gunakan \u00a7fcombat:reset_killfx_all\u00a7e.`);
     }
     return;
@@ -1468,7 +1523,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
       setKillFx(p.id, defaultFx);
       evictKillFxCache(p.id);
       // Also clear legacy world DP
-      try { world.setDynamicProperty("ckfx:" + p.id, undefined); } catch {}
+      try { world.setDynamicProperty("ckfx:" + p.id, undefined); } catch { }
       countOnline++;
     }
     // 2) Clear all offline ckfx: world DP keys
@@ -1498,7 +1553,8 @@ world.afterEvents.playerLeave.subscribe(({ playerId, playerName }) => {
             // [§2] Track only if scoreboard write succeeded — else debt is fake.
             try {
               obj.setScore(p, cur - penalty);
-              dp.set(CFG.K_DEBT + playerId, penalty);
+              const existingDebt = dp.get(CFG.K_DEBT + playerId, 0);
+              dp.set(CFG.K_DEBT + playerId, existingDebt + penalty);
               trackFlow("pvp_penalty", -penalty);
             } catch (e) {
               console.warn(`[Combat] log penalty setScore failed: ${playerName}`, e);
@@ -1535,9 +1591,11 @@ world.afterEvents.playerLeave.subscribe(({ playerId, playerName }) => {
   lastAttacker.delete(playerId);
   _nonPvpFireProtected.delete(playerId);
   _pvpHitSpam.delete(playerId);
+  _victimKillCD.delete(playerId);
+  playerJoinTime.delete(playerId);
   // Juga hapus entries dimana player ini adalah attacker orang lain
   for (const [victimId, data] of Array.from(lastAttacker)) {
     if (data.id === playerId) lastAttacker.delete(victimId);
   }
 });
-
+

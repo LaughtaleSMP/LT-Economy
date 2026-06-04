@@ -8,6 +8,7 @@ import {
   getPlayerActiveCount, calcFee, getFee, genId, pushHistory,
   pushNotif, addPendingItem, addPendingCoin, claimPendingCoin,
   getPendingItems, savePendingItems, writeTx, clearTx,
+  getPriceRecommendation,
 } from "../utils/storage.js";
 import { displayName, enchantSummary, serializeItem, giveItem, giveItemFromListing, returnItemToOwner, freeSlots, takeItemFromSlot, takePartialFromSlot, cacheItemClone, removeCachedClone, hasComplexData } from "../utils/items.js";
 import { getCoin, setCoin, addCoin, withLock, fmt, timeLeft, playSfx, checkSellCooldown, setSellCooldown, hasFirstSaleBonus, markFirstSale } from "../utils/helpers.js";
@@ -111,6 +112,17 @@ export async function uiSell(player) {
 
   const qtyLabel = sellQty > 1 ? ` x${sellQty}` : "";
 
+  // Price recommendation dari riwayat transaksi (read-only, no side-effect)
+  const rec = getPriceRecommendation(itemCheck.typeId, sellQty);
+  let recHint = "";
+  let recDefault = "";
+  if (rec) {
+    const ppuLabel = sellQty > 1 ? `\n§8   Per unit: §e${fmt(rec.perUnit)}⛃` : "";
+    recHint = `\n§a ★ Harga Pasar §8(${rec.txCount} transaksi)\n§8   Avg: §e${fmt(rec.avg)}⛃ §8| Min: §e${fmt(rec.min)}⛃ §8| Max: §e${fmt(rec.max)}⛃${ppuLabel}`;
+    // Cap ke MIN_PRICE..MAX_BUYOUT agar default form selalu valid
+    recDefault = String(Math.max(CFG.MIN_PRICE, Math.min(rec.avg, CFG.MAX_BUYOUT)));
+  }
+
   // Step 3: Pilih mode — Buyout atau Auction
   const modeForm = new ActionFormData()
     .title("§8 ♦ §eMODE§r §8♦ §r")
@@ -130,8 +142,8 @@ export async function uiSell(player) {
     const res2 = await new ModalFormData()
       .title(`  Harga — ${itemLabel}  §r`)
       .textField(
-        `§6 Item   §8» §e${itemLabel}${qtyLabel}\n§f Tentukan harga buyout §8(total)\n§8 Min: §e${fmt(CFG.MIN_PRICE)} §8| Maks: §e${fmt(CFG.MAX_BUYOUT)}\n§6 Fee §8» §e${getFee()}%% §8dipotong dari saldo`,
-        "Contoh: 1000", { defaultValue: "" }
+        `§6 Item   §8» §e${itemLabel}${qtyLabel}\n§f Tentukan harga buyout §8(total)\n§8 Min: §e${fmt(CFG.MIN_PRICE)} §8| Maks: §e${fmt(CFG.MAX_BUYOUT)}\n§6 Fee §8» §e${getFee()}%% §8dipotong dari saldo${recHint}`,
+        rec ? `Rekomendasi: ${rec.avg}` : "Contoh: 1000", { defaultValue: recDefault }
       )
       .show(player);
     if (res2.canceled) return;
@@ -146,15 +158,17 @@ export async function uiSell(player) {
     fee = calcFee(price, player);
   } else {
     // Step 4b: Auction — Input starting bid + buyout
+    const recStartHint = rec ? `\n§a ★ Rekomendasi: §e${fmt(rec.min)}⛃ §8- §e${fmt(rec.avg)}⛃ §8(${rec.txCount}tx)` : "";
+    const recStartDefault = rec ? String(Math.max(CFG.MIN_PRICE, rec.min)) : "";
     const res2 = await new ModalFormData()
       .title(`  Auction — ${itemLabel}  §r`)
       .textField(
-        `§6 Item §8» §e${itemLabel}${qtyLabel}\n§f Tentukan starting bid\n§8 Min: §e${fmt(CFG.MIN_PRICE)}`,
-        "Contoh: 500", { defaultValue: "" }
+        `§6 Item §8» §e${itemLabel}${qtyLabel}\n§f Tentukan starting bid\n§8 Min: §e${fmt(CFG.MIN_PRICE)}${recStartHint}`,
+        rec ? `Rekomendasi: ${Math.max(CFG.MIN_PRICE, rec.min)}` : "Contoh: 500", { defaultValue: recStartDefault }
       )
       .textField(
         `§f Buyout Price §8(opsional)\n§8 Harga beli langsung tanpa nunggu.\n§8 Kosongkan atau 0 = tanpa buyout.`,
-        "0 = tanpa buyout", { defaultValue: "0" }
+        "0 = tanpa buyout", { defaultValue: rec ? String(rec.avg) : "0" }
       )
       .show(player);
     if (res2.canceled) return;
@@ -467,7 +481,7 @@ async function acceptOffer(seller, listingId) {
     }
 
     updateListing(listingId, x => { x.status = "sold"; x.buyerId = l.offerId; x.buyerName = l.offerName; });
-    pushHistory({ type: "offer_accepted", item: displayName(l.itemData), seller: seller.name, buyer: l.offerName, price: l.offerAmount });
+    pushHistory({ type: "offer_accepted", item: displayName(l.itemData), itemId: l.itemData.typeId, qty: l.itemData.amount, seller: seller.name, buyer: l.offerName, price: l.offerAmount });
     return { ok: true, amount: l.offerAmount, fee: sellFee, payout: sellerPayout, itemName: displayName(l.itemData), buyerName: l.offerName, sellerName: seller.name, hasEnch: l.itemData.enchantments?.length > 0 };
   });
 

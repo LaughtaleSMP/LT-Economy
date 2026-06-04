@@ -211,6 +211,54 @@ export function pushHistory(entry) {
   dp.set(CFG.K_HIST, hist.slice(0, CFG.MAX_HIST));
 }
 
+// Cached 60s — hindari re-parse DP berulang. Read-only, no side-effects.
+let _recCache = null, _recCacheTs = 0;
+const _REC_TTL = 60_000;
+const _REC_SOLD = { sold: 1, offer_accepted: 1, auction_won: 1 };
+
+export function getPriceRecommendation(itemId, qty) {
+  if (!itemId || typeof itemId !== "string") return null;
+  const safeQty = Number.isFinite(qty) && qty > 0 ? Math.floor(qty) : 1;
+
+  try {
+    const now = Date.now();
+    if (!_recCache || now - _recCacheTs > _REC_TTL) {
+      _recCache = getHistory();
+      _recCacheTs = now;
+    }
+
+    let totalPrice = 0, totalQty = 0, minPpu = Infinity, maxPpu = 0, txCount = 0;
+
+    for (const h of _recCache) {
+      if (!_REC_SOLD[h.type]) continue;
+      if (h.itemId !== itemId) continue;
+      const p = Number(h.price) || 0;
+      if (p <= 0) continue;
+      const q = Number(h.qty) || 1;
+      const ppu = p / q;
+      totalPrice += p;
+      totalQty += q;
+      if (ppu < minPpu) minPpu = ppu;
+      if (ppu > maxPpu) maxPpu = ppu;
+      txCount++;
+    }
+
+    if (txCount === 0) return null;
+
+    const perUnit = Math.round(totalPrice / totalQty);
+    return {
+      // Cap ke MAX_BUYOUT agar default value tidak melampaui batas form
+      avg: Math.min(perUnit * safeQty, CFG.MAX_BUYOUT),
+      min: Math.min(Math.round(minPpu * safeQty), CFG.MAX_BUYOUT),
+      max: Math.min(Math.round(maxPpu * safeQty), CFG.MAX_BUYOUT),
+      perUnit,
+      txCount,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
 // PENDING NOTIFICATIONS (offline)
 // ═══════════════════════════════════════════════════════════
