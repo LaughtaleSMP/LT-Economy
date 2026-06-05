@@ -75,79 +75,7 @@ export function getCacheStats() {
   return { size: _cloneCache.size, max: _CACHE_MAX };
 }
 
-/**
- * Hapus passport elytra (ll:eid + lore marker) dari item sebelum diberikan ke player baru.
- * Diperlukan saat transfer ownership (auction buy/expired return ke bukan pemilik).
- * Passport system di dragon_boundary.js akan assign EID baru otomatis saat scan.
- */
-function stripElytraPassport(item) {
-  if (item.typeId !== "minecraft:elytra") return;
-  try { item.setDynamicProperty("ll:eid", undefined); } catch (_) {}
-  // Hapus lore marker LORE_PREFIX ("\u00A7r\u00A70ll:")
-  try {
-    const lore = item.getLore?.() ?? [];
-    const cleaned = lore.filter(l => !l.startsWith("\u00A7r\u00A70ll:"));
-    if (cleaned.length !== lore.length) item.setLore?.(cleaned);
-  } catch (_) {}
-  // [FIX] Tandai sebagai transfer dari auction — dragon_boundary akan izinkan
-  // tanpa menghitung sebagai klaim harian dari end frame
-  try { item.setDynamicProperty("ll:auction_give", true); } catch (_) {}
-}
 
-/**
- * [§5.4 cross-pack] World DP di Bedrock per-pack scoped — Economy set tidak bisa
- * dibaca Dragon Update. Pakai scoreboard sebagai bridge (sama pattern dengan
- * _eco_pricing dan _land_export). Score = pending bypass count per player.
- *
- * Dragon Update reads via `world.scoreboard.getObjective("_ely_pending")`.
- *
- * NOTE: Pass Player object langsung ke setScore — Bedrock auto-pakai
- * scoreboardIdentity. Pakai string fake-player name dengan ID numeric
- * memicu "Failed to resolve identity" di BDS modern.
- */
-const ELY_BRIDGE_OBJ = "_ely_pending";
-
-function _ensureElyBridge() {
-  try {
-    return world.scoreboard.getObjective(ELY_BRIDGE_OBJ)
-        ?? world.scoreboard.addObjective(ELY_BRIDGE_OBJ, "elytra auction pending");
-  } catch (e) {
-    console.error("[ELY-BRIDGE] ensureObjective failed:", e);
-    return null;
-  }
-}
-
-function _markAuctionElytra(player) {
-  try {
-    const sb = _ensureElyBridge();
-    if (sb) {
-      const ident = player.scoreboardIdentity ?? player;
-      const cur = sb.getScore(ident) ?? 0;
-      sb.setScore(ident, cur + 1);
-    }
-    // Backwards compat: also write world DP (legacy reader path, in-flight only).
-    try {
-      const key = `ll:ely_pending_${player.id}`;
-      world.setDynamicProperty(key, (world.getDynamicProperty(key) ?? 0) + 1);
-    } catch (_) {}
-  } catch (e) {
-    console.error(`[ELY-MARK-AUC] FAILED for ${player?.name}: ${e}`);
-  }
-}
-
-function _unmarkAuctionElytra(player) {
-  try {
-    const sb = _ensureElyBridge();
-    if (sb) {
-      const ident = player.scoreboardIdentity ?? player;
-      const cur = sb.getScore(ident) ?? 0;
-      if (cur > 0) sb.setScore(ident, cur - 1);
-    }
-    const key = `ll:ely_pending_${player.id}`;
-    const dpCur = world.getDynamicProperty(key) ?? 0;
-    if (dpCur > 0) world.setDynamicProperty(key, dpCur - 1);
-  } catch (_) {}
-}
 
 
 /**
@@ -175,8 +103,6 @@ export function restoreItem(listingId, itemData) {
  * Give item ke player dengan prioritas clone cache.
  * Return true jika berhasil, false jika gagal.
  * CATATAN: Menghapus cache setelah item berhasil di-give.
- * Untuk elytra: passport (ll:eid) di-strip agar buyer mendapat elytra bersih
- * dan passport system di dragon_boundary.js assign EID baru otomatis.
  */
 export function giveItemFromListing(player, listingId, itemData) {
   const item = restoreItem(listingId, itemData);
@@ -184,25 +110,13 @@ export function giveItemFromListing(player, listingId, itemData) {
     console.error("[Auction] giveItemFromListing: restoreItem gagal untuk", itemData.typeId);
     return false;
   }
-  // Strip passport elytra sebelum masuk inventory buyer
-  stripElytraPassport(item);
-  // [FIX] Mark SEBELUM placement — mencegah race condition dengan scan event-driven
-  // yang bisa jalan sebelum pending di-set dan langsung confiscate elytra
-  const isEly = item.typeId === "minecraft:elytra";
-  if (isEly) _markAuctionElytra(player);
   const ok = _placeItem(player, item, itemData.typeId);
-  if (!ok && isEly) _unmarkAuctionElytra(player); // Rollback jika gagal
   if (ok) removeCachedClone(listingId);
   return ok;
 }
 
 /**
  * Kembalikan item ke pemilik asli (seller cancel/expired listing).
- * [FIX] Untuk elytra: strip stale passport dan set ll:auction_give.
- * World DPs (ll:owner_*, ll:when_*) sudah dihapus saat listing dibuat,
- * jadi clone cache punya ll:eid yang stale — jika tidak di-strip,
- * elyScanInventory akan confiscate karena passport.ownerId = undefined
- * dan seller sudah punya ll:count >= 1.
  */
 export function returnItemToOwner(player, listingId, itemData) {
   const item = restoreItem(listingId, itemData);
@@ -210,12 +124,7 @@ export function returnItemToOwner(player, listingId, itemData) {
     console.error("[Auction] returnItemToOwner: restoreItem gagal untuk", itemData.typeId);
     return false;
   }
-  stripElytraPassport(item);
-  // [FIX] Mark SEBELUM placement — sama seperti giveItemFromListing
-  const isEly = item.typeId === "minecraft:elytra";
-  if (isEly) _markAuctionElytra(player);
   const ok = _placeItem(player, item, itemData.typeId);
-  if (!ok && isEly) _unmarkAuctionElytra(player);
   if (ok) removeCachedClone(listingId);
   return ok;
 }
@@ -423,7 +332,6 @@ function _placeItem(player, item, debugTypeId) {
 /**
  * Give item ke player dari serialized data (tanpa clone cache).
  * Digunakan untuk pending items dan case umum.
- * Elytra passport di-strip agar buyer mendapat elytra bersih.
  */
 export function giveItem(player, itemData) {
   const item = deserializeItem(itemData);
@@ -431,12 +339,7 @@ export function giveItem(player, itemData) {
     console.error("[Auction] giveItem: deserializeItem gagal untuk", JSON.stringify(itemData).substring(0, 200));
     return false;
   }
-  // Strip passport elytra — sama seperti giveItemFromListing
-  stripElytraPassport(item);
-  const isEly = item.typeId === "minecraft:elytra";
-  if (isEly) _markAuctionElytra(player);
   const ok = _placeItem(player, item, itemData.typeId);
-  if (!ok && isEly) _unmarkAuctionElytra(player);
   return ok;
 }
 

@@ -205,10 +205,6 @@ async function executeBuyout(buyer, listingId) {
     if (!l) return { ok: false, err: "not_found" };
     if (l.price <= 0) return { ok: false, err: "no_buyout" };
     if (getCoin(buyer) < l.price) return { ok: false, err: "insufficient" };
-    // Block pembelian elytra jika buyer masih cooldown (tag set by Dragon Update pack)
-    if (l.itemData?.typeId === "minecraft:elytra" && buyer.hasTag("ely_cd")) {
-      return { ok: false, err: "ely_cd" };
-    }
     writeTx(buyer.id, { type: "buy", listingId, price: l.price });
     // [§2 iron rule] Atomic deduct — abort if scoreboard write fails to
     // prevent buyer-paid-nothing-got-item exploit.
@@ -257,7 +253,6 @@ async function executeBuyout(buyer, listingId) {
   if (result === false) { buyer.sendMessage("§8[§cAuction§8]§c Transaksi sedang diproses, coba lagi."); return; }
   if (!result.ok) {
     if (result.err === "insufficient") buyer.sendMessage("§8[§cAuction§8]§c Saldo tidak cukup!");
-    else if (result.err === "ely_cd") buyer.sendMessage("§8[§cAuction§8]§c Tidak bisa beli elytra — cooldown masih aktif!\n§7  Reset pukul §f20:00 WIB§7. Cek: §e/lt:elytime");
     else if (result.err === "internal") buyer.sendMessage("§8[§cAuction§8]§c Transaksi gagal, coba lagi sebentar.");
     else buyer.sendMessage("§8[§cAuction§8]§c Listing sudah tidak tersedia.");
     return;
@@ -273,11 +268,6 @@ async function executeBuyout(buyer, listingId) {
 async function uiPlaceBid(buyer, listingId) {
   const l = getActiveListings().find(x => x.id === listingId);
   if (!l || l.mode !== "auction") { buyer.sendMessage("§8[§cAuction§8]§c Listing tidak tersedia."); return; }
-  // Block bid pada elytra jika buyer masih cooldown (tag dari Dragon Update)
-  if (l.itemData?.typeId === "minecraft:elytra" && buyer.hasTag("ely_cd")) {
-    buyer.sendMessage("§8[§cAuction§8]§c Tidak bisa bid elytra — cooldown masih aktif!\n§7  Reset pukul §f20:00 WIB§7. Cek: §e/lt:elytime");
-    return;
-  }
   const minBid = getMinBid(l);
   const myCoin = getCoin(buyer);
 
@@ -448,11 +438,6 @@ async function uiPlaceBid(buyer, listingId) {
 async function uiMakeOffer(buyer, listingId) {
   const l = getActiveListings().find(x => x.id === listingId);
   if (!l) { buyer.sendMessage("§8[§cAuction§8]§c Listing sudah tidak ada."); return; }
-  // Block offer pada elytra jika buyer masih cooldown (tag dari Dragon Update)
-  if (l.itemData?.typeId === "minecraft:elytra" && buyer.hasTag("ely_cd")) {
-    buyer.sendMessage("§8[§cAuction§8]§c Tidak bisa tawar elytra — cooldown masih aktif!\n§7  Reset pukul §f20:00 WIB§7. Cek: §e/lt:elytime");
-    return;
-  }
   const maxOffer = l.price - 1;
   const minOffer = CFG.MIN_PRICE;
   const res = await new ModalFormData()

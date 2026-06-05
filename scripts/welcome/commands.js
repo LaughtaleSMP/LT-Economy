@@ -14,7 +14,6 @@ export async function guideCommands(player) {
   body += `  §8├ §e/daily     §8── §fBuka Daily System\n`;
   body += `  §8├ §e/gacha     §8── §fBuka Gacha Hub\n`;
   body += `  §8├ §e/guide     §8── §fBuka panduan ini\n`;
-  body += `  §8├ §e/lt:elytime §8── §fStatus cooldown elytra\n`;
   body += `  §8├ §e/lt:lb     §8── §fLeaderboard Mingguan\n`;
   body += `  §8├ §e/lt:stats  §8── §fStatistik Pribadi\n`;
   body += `  §8├ §e/lt:stagflation §8── §fStatus stimulus ekonomi\n`;
@@ -33,8 +32,7 @@ export async function guideCommands(player) {
   body += `  §8├ §fSelesaikan quest untuk koin extra\n`;
   body += `  §8├ §fGunakan Auction untuk jual item\n`;
   body += `  §8├ §fKlaim land untuk proteksi bangunan\n`;
-  body += `  §8├ §fAktifkan PvP untuk earn koin dari kill\n`;
-  body += `  §8└ §fElytra: §e/lt:elytime §funtuk cek cooldown\n`;
+  body += `  §8└ §fAktifkan PvP untuk earn koin dari kill\n`;
   body += `\n${HR}`;
 
   await new ActionFormData()

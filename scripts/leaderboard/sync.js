@@ -31,6 +31,7 @@ import { buildExportAll } from "../gacha/utils/export.js";
 import { PT_POOL } from "../gacha/config.js";
 import { CFG as COMBAT_CFG } from "../Combat/config.js";
 import { checkWorldTransition, getWorldId, isBackupSafe, unlockBackup, backupFingerprint, hasBackupChanged, getBackupTs } from "./sync_world_guard.js";
+import { requestMimiBackup, getMimiTags } from "./sync_mimi.js";
 import { _injectAuctionSync } from "../auction/utils/storage.js";
 
 export { pollTopupQueue } from "./sync_topup.js";
@@ -90,13 +91,16 @@ export async function syncLeaderboard() {
     await checkWorldTransition();
     gachaLB._world_id = getWorldId();
 
+    // Request Mimi Inka customization data via scriptevent bridge (§8.5)
+    requestMimiBackup();
+
     // Skip players without paid assets — save Supabase payload size
     try {
       const backups = buildExportAll();
       const filtered = [];
       for (const b of backups) {
         const parts = b.str.split('|');
-        let gem = 0, pt = '', rawKfx = '';
+        let gem = 0, pt = '', rawKfx = '', rawMimi = '';
         for (let i = 1; i < parts.length; i++) {
           const ci = parts[i].indexOf(':');
           if (ci < 0) continue;
@@ -104,6 +108,7 @@ export async function syncLeaderboard() {
           if (k === 'gem') gem = parseInt(v, 10) || 0;
           else if (k === 'pt') pt = v;
           else if (k === 'kfx') rawKfx = v;
+          else if (k === 'mimi') rawMimi = v;
         }
 
         // Bracket-safe split for kfx
@@ -121,11 +126,18 @@ export async function syncLeaderboard() {
           delete kfxKeys._buf;
         }
 
-        if (gem > 0 || pt || kfxKeys.length > 0) {
+        let mimiKeys = rawMimi ? rawMimi.split(',').filter(Boolean) : [];
+
+        // Merge Mimi Inka customization tags from cross-pack bridge
+        const bridgeTags = getMimiTags(b.name);
+        if (bridgeTags.length) mimiKeys = [...new Set([...mimiKeys, ...bridgeTags])];
+
+        if (gem > 0 || pt || kfxKeys.length > 0 || mimiKeys.length > 0) {
           filtered.push({
             id: b.id, name: b.name, data: b.str, online: b.isOnline,
             gem, trails: pt ? pt.split(',').filter(Boolean) : [],
             killfx: kfxKeys,
+            mimi: mimiKeys,
           });
         }
       }

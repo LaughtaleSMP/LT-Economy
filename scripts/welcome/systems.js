@@ -14,235 +14,222 @@ export async function guideGacha(player) {
   const pityL = Math.max(50, Math.round(25000 / eq1));
 
   let body = `${HR}\n`;
-  body += `§d  ★ GACHA SYSTEM\n`;
+  body += `\u00a7d  \u2605 GACHA SYSTEM\n`;
   body += `${HR}\n\n`;
-  body += `  §fSistem gacha dengan animasi\n`;
-  body += `  §fpremium di chest interaktif.\n\n`;
-  body += `  §eDUA TIPE GACHA\n`;
+  body += `  \u00a7fSistem gacha dengan animasi\n`;
+  body += `  \u00a7fpremium di chest interaktif.\n\n`;
+  body += `  \u00a7eDUA TIPE GACHA\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §5✦ §fGacha Partikel §8── §fbayar §bGem\n`;
-  body += `  §8│ §8  1x=§b10 Gem§8, 10x=§b90 Gem §8(tetap)\n`;
-  body += `  §8└ §6★ §fGacha Peralatan §8── §fbayar §eKoin\n`;
-  body += `  §8   §8  1x=§e${eq1} Koin§8, 10x=§e${eq10} Koin\n`;
-  body += `  §8   §8  §7(dinamis ikut ekonomi server)\n\n`;
-  body += `  §eFITUR\n`;
+  body += `  \u00a78\u251c \u00a75\u2726 \u00a7fGacha Partikel \u00a78\u2500\u2500 \u00a7fbayar \u00a7bGem\n`;
+  body += `  \u00a78\u2502 \u00a78  1x=\u00a7b10 Gem\u00a78, 10x=\u00a7b90 Gem \u00a78(tetap)\n`;
+  body += `  \u00a78\u2514 \u00a76\u2605 \u00a7fGacha Peralatan \u00a78\u2500\u2500 \u00a7fbayar \u00a7eKoin\n`;
+  body += `  \u00a78   \u00a78  1x=\u00a7e${eq1} Koin\u00a78, 10x=\u00a7e${eq10} Koin\n`;
+  body += `  \u00a78   \u00a78  \u00a77(dinamis ikut ekonomi server)\n\n`;
+  body += `  \u00a7eFITUR\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fPull 1x atau 10x\n`;
-  body += `  §8├ §fPity: Rare+ setiap §e${pityR}x §fpull\n`;
-  body += `  §8├ §fPity: Legend setiap §e${pityL}x §fpull\n`;
-  body += `  §8├ §fDuplikat = refund §b5 Gem\n`;
-  body += `  §8├ §fLeaderboard & statistik\n`;
-  body += `  §8└ §fAnimasi roll di chest\n\n`;
-  body += `  §eCARA BUKA\n`;
+  body += `  \u00a78\u251c \u00a7fPull 1x atau 10x\n`;
+  body += `  \u00a78\u251c \u00a7fPity: Rare+ setiap \u00a7e${pityR}x \u00a7fpull\n`;
+  body += `  \u00a78\u251c \u00a7fPity: Legend setiap \u00a7e${pityL}x \u00a7fpull\n`;
+  body += `  \u00a78\u251c \u00a7fDuplikat = refund \u00a7b5 Gem\n`;
+  body += `  \u00a78\u251c \u00a7fLeaderboard & statistik\n`;
+  body += `  \u00a78\u2514 \u00a7fAnimasi roll di chest\n\n`;
+  body += `  \u00a7eCARA BUKA\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fKetik §e/gacha §fdi chat\n`;
-  body += `  §8└ §fAtau klik chest gacha terdaftar\n`;
+  body += `  \u00a78\u251c \u00a7fKetik \u00a7e/gacha \u00a7fdi chat\n`;
+  body += `  \u00a78\u2514 \u00a7fAtau klik chest gacha terdaftar\n`;
   body += `\n${HR}`;
 
   await new ActionFormData()
-    .title("§8 ♦ §dGACHA§r §8♦ §r")
+    .title("\u00a78 \u2666 \u00a7dGACHA\u00a7r \u00a78\u2666 \u00a7r")
     .body(body)
-    .button("§6  Kembali", "textures/items/arrow")
+    .button("\u00a76  Kembali", "textures/items/arrow")
     .show(player);
 }
 
 export async function guideTreecap(player) {
   let body = `${HR}\n`;
-  body += `§a  ★ TREE CAPITATOR\n`;
+  body += `\u00a7a  \u2605 TREE CAPITATOR\n`;
   body += `${HR}\n\n`;
-  body += `  §fTebang seluruh pohon sekaligus\n`;
-  body += `  §fdengan satu kali potong!\n\n`;
-  body += `  §eCARA PAKAI\n`;
+  body += `  \u00a7fTebang seluruh pohon sekaligus\n`;
+  body += `  \u00a7fdengan satu kali potong!\n\n`;
+  body += `  \u00a7eCARA PAKAI\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §f1. Pegang §ekapak §f(jenis apapun)\n`;
-  body += `  §8├ §f2. Tebang satu blok log/batang\n`;
-  body += `  §8├ §f3. Seluruh pohon langsung tumbang\n`;
-  body += `  §8└ §f4. Daun/wart ikut hancur otomatis\n\n`;
-  body += `  §eBATAS LOG PER KAPAK\n`;
+  body += `  \u00a78\u251c \u00a7f1. Pegang \u00a7ekapak \u00a7f(jenis apapun)\n`;
+  body += `  \u00a78\u251c \u00a7f2. Tebang satu blok log/batang\n`;
+  body += `  \u00a78\u251c \u00a7f3. Seluruh pohon langsung tumbang\n`;
+  body += `  \u00a78\u2514 \u00a7f4. Daun/wart ikut hancur otomatis\n\n`;
+  body += `  \u00a7eBATAS LOG PER KAPAK\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §7Wooden/Stone  §8── §f8 log\n`;
-  body += `  §8├ §fIron/Golden   §8── §f12 log\n`;
-  body += `  §8├ §bDiamond       §8── §f24 log\n`;
-  body += `  §8└ §dNetherite     §8── §f48 log\n\n`;
-  body += `  §ePOHON YANG DIDUKUNG\n`;
+  body += `  \u00a78\u251c \u00a77Wooden/Stone  \u00a78\u2500\u2500 \u00a7f8 log\n`;
+  body += `  \u00a78\u251c \u00a7fIron/Golden   \u00a78\u2500\u2500 \u00a7f12 log\n`;
+  body += `  \u00a78\u251c \u00a7bDiamond       \u00a78\u2500\u2500 \u00a7f24 log\n`;
+  body += `  \u00a78\u2514 \u00a7dNetherite     \u00a78\u2500\u2500 \u00a7f48 log\n\n`;
+  body += `  \u00a7ePOHON YANG DIDUKUNG\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §aOverworld §8── §fSemua jenis log & daun\n`;
-  body += `  §8├ §cNether    §8── §fStem & wart block\n`;
-  body += `  §8└ §5Mushroom  §8── §fMushroom block & stem\n\n`;
-  body += `  §eFITUR TAMBAHAN\n`;
+  body += `  \u00a78\u251c \u00a7aOverworld \u00a78\u2500\u2500 \u00a7fSemua jenis log & daun\n`;
+  body += `  \u00a78\u251c \u00a7cNether    \u00a78\u2500\u2500 \u00a7fStem & wart block\n`;
+  body += `  \u00a78\u2514 \u00a75Mushroom  \u00a78\u2500\u2500 \u00a7fMushroom block & stem\n\n`;
+  body += `  \u00a7eFITUR TAMBAHAN\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fDurabilitas kapak berkurang per log\n`;
-  body += `  §8├ §fCooldown otomatis antar tebang\n`;
-  body += `  §8├ §e/ltcap on §8── §faktifkan TreeCap\n`;
-  body += `  §8├ §e/ltcap off §8── §fmatikan TreeCap\n`;
-  body += `  §8├ §e/ltcap status §8── §fcek status\n`;
-  body += `  §8└ §eAuto-OFF §8── §fmati otomatis jika idle\n`;
-  body += `  §8  §8  (default 60 detik tidak dipakai)\n`;
+  body += `  \u00a78\u251c \u00a7fDurabilitas kapak berkurang per log\n`;
+  body += `  \u00a78\u251c \u00a7fCooldown otomatis antar tebang\n`;
+  body += `  \u00a78\u251c \u00a7e/ltcap on \u00a78\u2500\u2500 \u00a7faktifkan TreeCap\n`;
+  body += `  \u00a78\u251c \u00a7e/ltcap off \u00a78\u2500\u2500 \u00a7fmatikan TreeCap\n`;
+  body += `  \u00a78\u251c \u00a7e/ltcap status \u00a78\u2500\u2500 \u00a7fcek status\n`;
+  body += `  \u00a78\u2514 \u00a7eAuto-OFF \u00a78\u2500\u2500 \u00a7fmati otomatis jika idle\n`;
+  body += `  \u00a78  \u00a78  (default 60 detik tidak dipakai)\n`;
   body += `\n${HR}`;
 
   await new ActionFormData()
-    .title("§8 ♦ §aTREECAP§r §8♦ §r")
+    .title("\u00a78 \u2666 \u00a7aTREECAP\u00a7r \u00a78\u2666 \u00a7r")
     .body(body)
-    .button("§6  Kembali", "textures/items/arrow")
+    .button("\u00a76  Kembali", "textures/items/arrow")
     .show(player);
 }
 
 export async function guideLand(player) {
   let body = `${HR}\n`;
-  body += `§2  ★ MIMI LAND\n`;
+  body += `\u00a72  \u2605 MIMI LAND\n`;
   body += `${HR}\n\n`;
-  body += `  §fKlaim dan lindungi area milikmu\n`;
-  body += `  §fdari player lain!\n\n`;
-  body += `  §eFITUR UTAMA\n`;
+  body += `  \u00a7fKlaim dan lindungi area milikmu\n`;
+  body += `  \u00a7fdari player lain!\n\n`;
+  body += `  \u00a7eFITUR UTAMA\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fKlaim area dengan beli koin\n`;
-  body += `  §8├ §fHarga dinamis ikut ekonomi server\n`;
-  body += `  §8├ §fProteksi build/break/interact\n`;
-  body += `  §8├ §fWhitelist teman di area\n`;
-  body += `  §8├ §fPublic/Private mode\n`;
-  body += `  §8├ §fRefund saat hapus land\n`;
-  body += `  §8├ §fBayar §bGem §8── §bdiskon 99%% + bebas PPN\n`;
-  body += `  §8└ §fHarga berdasarkan luas area\n\n`;
-  body += `  §eCARA PAKAI\n`;
+  body += `  \u00a78\u251c \u00a7fKlaim area dengan beli koin\n`;
+  body += `  \u00a78\u251c \u00a7fHarga dinamis ikut ekonomi server\n`;
+  body += `  \u00a78\u251c \u00a7fProteksi build/break/interact\n`;
+  body += `  \u00a78\u251c \u00a7fWhitelist teman di area\n`;
+  body += `  \u00a78\u251c \u00a7fPublic/Private mode\n`;
+  body += `  \u00a78\u251c \u00a7fRefund saat hapus land\n`;
+  body += `  \u00a78\u251c \u00a7fBayar \u00a7bGem \u00a78\u2500\u2500 \u00a7bdiskon 99%% + bebas PPN\n`;
+  body += `  \u00a78\u2514 \u00a7fHarga berdasarkan luas area\n\n`;
+  body += `  \u00a7eCARA PAKAI\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §f1. Pegang item §2Mimi Land\n`;
-  body += `  §8├ §f2. §eShift+klik §fblok untuk titik 1\n`;
-  body += `  §8├ §f3. §eShift+klik §fblok untuk titik 2\n`;
-  body += `  §8├ §f4. §eKlik biasa §f(tanpa shift) buka menu\n`;
-  body += `  §8└ §f5. Buat land dari menu\n\n`;
-  body += `  §c§lAUTO-CLEANUP\n`;
+  body += `  \u00a78\u251c \u00a7f1. Pegang item \u00a72Mimi Land\n`;
+  body += `  \u00a78\u251c \u00a7f2. \u00a7eShift+klik \u00a7fblok untuk titik 1\n`;
+  body += `  \u00a78\u251c \u00a7f3. \u00a7eShift+klik \u00a7fblok untuk titik 2\n`;
+  body += `  \u00a78\u251c \u00a7f4. \u00a7eKlik biasa \u00a7f(tanpa shift) buka menu\n`;
+  body += `  \u00a78\u2514 \u00a7f5. Buat land dari menu\n\n`;
+  body += `  \u00a7c\u00a7lAUTO-CLEANUP\n`;
   body += `${HR_THIN}\n`;
-  body += `  §c⚠ §fLand §cotomatis dihapus §fjika owner\n`;
-  body += `  §ftidak login selama §c14 hari§f.\n`;
-  body += `  §8├ §fTidak ada refund otomatis.\n`;
-  body += `  §8└ §fLogin rutin untuk jaga land!\n`;
+  body += `  \u00a7c\u26a0 \u00a7fLand \u00a7cotomatis dihapus \u00a7fjika owner\n`;
+  body += `  \u00a7ftidak login selama \u00a7c14 hari\u00a7f.\n`;
+  body += `  \u00a78\u251c \u00a7fTidak ada refund otomatis.\n`;
+  body += `  \u00a78\u2514 \u00a7fLogin rutin untuk jaga land!\n`;
   body += `\n${HR}`;
 
   await new ActionFormData()
-    .title("§8 ♦ §2MIMI LAND§r §8♦ §r")
+    .title("\u00a78 \u2666 \u00a72MIMI LAND\u00a7r \u00a78\u2666 \u00a7r")
     .body(body)
-    .button("§6  Kembali", "textures/items/arrow")
+    .button("\u00a76  Kembali", "textures/items/arrow")
     .show(player);
 }
 
 export async function guideCombat(player) {
   let body = `${HR}\n`;
-  body += `§c  ★ COMBAT PvP\n`;
+  body += `\u00a7c  \u2605 COMBAT PvP\n`;
   body += `${HR}\n\n`;
-  body += `  §fSistem PvP §eOTOMATIS §fterintegrasi koin.\n`;
-  body += `  §fKill musuh = dapat koin!\n\n`;
-  body += `  §eCARA KERJA\n`;
+  body += `  \u00a7fSistem PvP \u00a7eOTOMATIS \u00a7fterintegrasi koin.\n`;
+  body += `  \u00a7fKill musuh = dapat koin!\n\n`;
+  body += `  \u00a7eCARA KERJA\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §c1. §fPukul player lain\n`;
-  body += `  §8│ §8   -> PvP-mu §cotomatis aktif\n`;
-  body += `  §8│ §8   -> Hit pertama §7tidak melukai\n`;
-  body += `  §8├ §c2. §fLawan pukul balik\n`;
-  body += `  §8│ §8   -> PvP lawan §cotomatis aktif\n`;
-  body += `  §8│ §8   -> Pertarungan dimulai!\n`;
-  body += `  §8└ §c3. §fIdle §e30 detik\n`;
-  body += `  §8     -> PvP §aotomatis nonaktif\n\n`;
+  body += `  \u00a78\u251c \u00a7c1. \u00a7fPukul player lain\n`;
+  body += `  \u00a78\u2502 \u00a78   -> PvP-mu \u00a7cotomatis aktif\n`;
+  body += `  \u00a78\u2502 \u00a78   -> Hit pertama \u00a77tidak melukai\n`;
+  body += `  \u00a78\u251c \u00a7c2. \u00a7fLawan pukul balik\n`;
+  body += `  \u00a78\u2502 \u00a78   -> PvP lawan \u00a7cotomatis aktif\n`;
+  body += `  \u00a78\u2502 \u00a78   -> Pertarungan dimulai!\n`;
+  body += `  \u00a78\u2514 \u00a7c3. \u00a7fIdle \u00a7e30 detik\n`;
+  body += `  \u00a78     -> PvP \u00a7aotomatis nonaktif\n\n`;
   // Streak multiplier dari config
   const streakStr = (CFG_PVP.STREAK_MULTIPLIER || [])
     .filter(t => t.mult > 1)
-    .map(t => `${t.min} kill §a${t.mult}x§7`)
-    .join(" §8· §7");
+    .map(t => `${t.min} kill \u00a7a${t.mult}x\u00a77`)
+    .join(" \u00a78\u00b7 \u00a77");
 
-  body += `  §eFITUR\n`;
+  body += `  \u00a7eFITUR\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fKill Reward §8── §7dapat §a${CFG_PVP.KILL_REWARD_PCT}%%§7 koin korban\n`;
-  body += `  §8│ §8  §7(min §a${CFG_PVP.MIN_REWARD}§7, max §a${CFG_PVP.MAX_REWARD}§7 koin)\n`;
-  body += `  §8├ §fStreak Mult §8── §7${streakStr}\n`;
-  body += `  §8├ §fCombat Tag §8── §715s tidak bisa idle-off\n`;
-  body += `  §8├ §fHUD Stats §8── §7actionbar realtime\n`;
-  body += `  §8├ §fMin. Koin §8── §7harus punya §a${CFG_PVP.MIN_COIN_TO_ENABLE}§7 koin\n`;
-  body += `  §8└ §fLand Protect §8── §7PvP off di area land\n\n`;
-  body += `  §4HUKUMAN MEMBUNUH NON-PVP\n`;
+  body += `  \u00a78\u251c \u00a7fKill Reward \u00a78\u2500\u2500 \u00a77dapat \u00a7a${CFG_PVP.KILL_REWARD_PCT}%%\u00a77 koin korban\n`;
+  body += `  \u00a78\u2502 \u00a78  \u00a77(min \u00a7a${CFG_PVP.MIN_REWARD}\u00a77, max \u00a7a${CFG_PVP.MAX_REWARD}\u00a77 koin)\n`;
+  body += `  \u00a78\u251c \u00a7fStreak Mult \u00a78\u2500\u2500 \u00a77${streakStr}\n`;
+  body += `  \u00a78\u251c \u00a7fCombat Tag \u00a78\u2500\u2500 \u00a7715s tidak bisa idle-off\n`;
+  body += `  \u00a78\u251c \u00a7fHUD Stats \u00a78\u2500\u2500 \u00a77actionbar realtime\n`;
+  body += `  \u00a78\u251c \u00a7fMin. Koin \u00a78\u2500\u2500 \u00a77harus punya \u00a7a${CFG_PVP.MIN_COIN_TO_ENABLE}\u00a77 koin\n`;
+  body += `  \u00a78\u2514 \u00a7fLand Protect \u00a78\u2500\u2500 \u00a77PvP off di area land\n\n`;
+  body += `  \u00a74HUKUMAN MEMBUNUH NON-PVP\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §f1x: §c-5.000 Koin §8+ drop semua item\n`;
-  body += `  §8├ §f2x: §c-15.000 Koin §8+ drop + §4ban 10 menit\n`;
-  body += `  §8├ §f3x: §c-50.000 Koin §8+ drop + §4BAN PERMANENT\n`;
-  body += `  §8├ §fKoin bisa §cminus §f(hutang)\n`;
-  body += `  §8└ §fDecay: 1 offense per 1 jam\n\n`;
-  body += `  §eCARA BUKA MENU\n`;
+  body += `  \u00a78\u251c \u00a7f1x: \u00a7c-5.000 Koin \u00a78+ drop semua item\n`;
+  body += `  \u00a78\u251c \u00a7f2x: \u00a7c-15.000 Koin \u00a78+ drop + \u00a74ban 10 menit\n`;
+  body += `  \u00a78\u251c \u00a7f3x: \u00a7c-50.000 Koin \u00a78+ drop + \u00a74BAN PERMANENT\n`;
+  body += `  \u00a78\u251c \u00a7fKoin bisa \u00a7cminus \u00a7f(hutang)\n`;
+  body += `  \u00a78\u2514 \u00a7fDecay: 1 offense per 1 jam\n\n`;
+  body += `  \u00a7eCARA BUKA MENU\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8└ §fKetik §c/pvp §fdi chat\n`;
+  body += `  \u00a78\u2514 \u00a7fKetik \u00a7c/pvp \u00a7fdi chat\n`;
   body += `\n${HR}`;
 
   await new ActionFormData()
-    .title("§8 ♦ §cCOMBAT§r §8♦ §r")
+    .title("\u00a78 \u2666 \u00a7cCOMBAT\u00a7r \u00a78\u2666 \u00a7r")
     .body(body)
-    .button("§6  Kembali", "textures/items/arrow")
+    .button("\u00a76  Kembali", "textures/items/arrow")
     .show(player);
 }
 
 export async function guideLeaderboard(player) {
   let body = `${HR}\n`;
-  body += `§6  ★ WEEKLY LEADERBOARD\n`;
+  body += `\u00a76  \u2605 WEEKLY LEADERBOARD\n`;
   body += `${HR}\n\n`;
-  body += `  §fKompetisi mingguan antar player!\n`;
-  body += `  §fTop 3 dapat reward koin.\n\n`;
-  body += `  §eFITUR UTAMA\n`;
+  body += `  \u00a7fKompetisi mingguan antar player!\n`;
+  body += `  \u00a7fTop 3 dapat reward koin.\n\n`;
+  body += `  \u00a7eFITUR UTAMA\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fReset otomatis tiap 7 hari\n`;
-  body += `  §8├ §fTop 10 leaderboard + kategori\n`;
-  body += `  §8├ §fReward top 3 + streak bonus\n`;
-  body += `  §8├ §fMinggu lalu bisa dilihat\n`;
-  body += `  §8└ §fReward offline dikirim saat login\n\n`;
-  body += `  §eREWARD\n`;
+  body += `  \u00a78\u251c \u00a7fReset otomatis tiap 7 hari\n`;
+  body += `  \u00a78\u251c \u00a7fTop 10 leaderboard + kategori\n`;
+  body += `  \u00a78\u251c \u00a7fReward top 3 + streak bonus\n`;
+  body += `  \u00a78\u251c \u00a7fMinggu lalu bisa dilihat\n`;
+  body += `  \u00a78\u2514 \u00a7fReward offline dikirim saat login\n\n`;
+  body += `  \u00a7eREWARD\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8| §6#1 §8-- §e+5.000 Koin\n`;
-  body += `  §8| §f#2 §8-- §e+3.000 Koin\n`;
-  body += `  §8| §e#3 §8-- §e+1.000 Koin\n\n`;
-  body += `  §eCARA DAPAT SKOR\n`;
+  body += `  \u00a78| \u00a76#1 \u00a78-- \u00a7e+5.000 Koin\n`;
+  body += `  \u00a78| \u00a7f#2 \u00a78-- \u00a7e+3.000 Koin\n`;
+  body += `  \u00a78| \u00a7e#3 \u00a78-- \u00a7e+1.000 Koin\n\n`;
+  body += `  \u00a7eCARA DAPAT SKOR\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fKill Mob  §8── §e5 pts\n`;
-  body += `  §8├ §fMine Blok §8── §e1 pts\n`;
-  body += `  §8├ §fPasang    §8── §e1 pts\n`;
-  body += `  §8└ §fPvP Kill  §8── §e20 pts\n\n`;
-  body += `  §eCARA BUKA\n`;
+  body += `  \u00a78\u251c \u00a7fKill Mob  \u00a78\u2500\u2500 \u00a7e5 pts\n`;
+  body += `  \u00a78\u251c \u00a7fMine Blok \u00a78\u2500\u2500 \u00a7e1 pts\n`;
+  body += `  \u00a78\u251c \u00a7fPasang    \u00a78\u2500\u2500 \u00a7e1 pts\n`;
+  body += `  \u00a78\u2514 \u00a7fPvP Kill  \u00a78\u2500\u2500 \u00a7e20 pts\n\n`;
+  body += `  \u00a7eCARA BUKA\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fKetik §e/lt:lb\n`;
-  body += `  §8└ §fKetik §e/lt:stats\n`;
+  body += `  \u00a78\u251c \u00a7fKetik \u00a7e/lt:lb\n`;
+  body += `  \u00a78\u2514 \u00a7fKetik \u00a7e/lt:stats\n`;
   body += `\n${HR}`;
 
   await new ActionFormData()
-    .title("§8 ♦ §6LEADERBOARD§r §8♦ §r")
+    .title("\u00a78 \u2666 \u00a76LEADERBOARD\u00a7r \u00a78\u2666 \u00a7r")
     .body(body)
-    .button("§6  Kembali", "textures/items/arrow")
+    .button("\u00a76  Kembali", "textures/items/arrow")
     .show(player);
 }
 
 export async function guideDragon(player) {
   let body = `${HR}\n`;
-  body += `§5  ★ DRAGON UPDATE\n`;
+  body += `\u00a75  \u2605 DRAGON UPDATE\n`;
   body += `${HR}\n\n`;
-  body += `  §fBoss fight Ender Dragon dengan\n`;
-  body += `  §fsistem Elytra terkontrol.\n\n`;
-  body += `  §eBOSS FIGHT\n`;
+  body += `  \u00a7fBoss fight Ender Dragon dengan\n`;
+  body += `  \u00a7fsistem boss fight yang seru.\n\n`;
+  body += `  \u00a7eBOSS FIGHT\n`;
   body += `${HR_THIN}\n`;
-  body += `  §8├ §fLawan Ender Dragon di The End\n`;
-  body += `  §8├ §fBiaya masuk dari treasury server\n`;
-  body += `  §8├ §fReward koin dari treasury saat menang\n`;
-  body += `  §8└ §fTimer otomatis & boundary limit\n\n`;
-  body += `  §eELYTRA SYSTEM\n`;
-  body += `${HR_THIN}\n`;
-  body += `  §8├ §fLimit §e1 elytra§f per hari dari frame\n`;
-  body += `  §8├ §aReset setiap hari §f20:00 WIB\n`;
-  body += `  §8├ §fElytra dari §eAuction/Gacha §ftidak terkena limit\n`;
-  body += `  §8├ §fElytra lama dibawa ke hari berikutnya\n`;
-  body += `  §8└ §fCek cooldown: §e/lt:elytime\n\n`;
-  body += `  §eTIPS AMAN\n`;
-  body += `${HR_THIN}\n`;
-  body += `  §8├ §fBeli elytra di Auction = bebas limit\n`;
-  body += `  §8├ §fElytra dari Gacha = bebas limit\n`;
-  body += `  §8├ §fJangan ambil dari frame jika sudah punya\n`;
-  body += `  §8└ §fGunakan §e/lt:elytime §fcek status kamu\n`;
+  body += `  \u00a78\u251c \u00a7fLawan Ender Dragon di The End\n`;
+  body += `  \u00a78\u251c \u00a7fBiaya masuk dari treasury server\n`;
+  body += `  \u00a78\u251c \u00a7fReward koin dari treasury saat menang\n`;
+  body += `  \u00a78\u2514 \u00a7fTimer otomatis & boundary limit\n`;
   body += `\n${HR}`;
 
   await new ActionFormData()
-    .title("§8 ♦ §5DRAGON UPDATE§r §8♦ §r")
+    .title("\u00a78 \u2666 \u00a75DRAGON UPDATE\u00a7r \u00a78\u2666 \u00a7r")
     .body(body)
-    .button("§6  Kembali", "textures/items/arrow")
+    .button("\u00a76  Kembali", "textures/items/arrow")
     .show(player);
 }
 
@@ -256,7 +243,7 @@ export async function guideEvent(player) {
   } catch { }
 
   let body = `${HR}\n`;
-  body += `\u00a76  ★ EVENT\n`;
+  body += `\u00a76  \u2605 EVENT\n`;
   body += `${HR}\n\n`;
 
   // Status

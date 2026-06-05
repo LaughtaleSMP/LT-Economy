@@ -44,45 +44,17 @@ function applySpecificEnchants(stack, enchants) {
   } catch (_) {}
 }
 
-/**
- * [FIX] Menggunakan WORLD DP, bukan player DP.
- * Player DP bersifat pack-scoped — Economy set, Dragon Update tidak bisa baca.
- */
-function _markAuctionElytra(player) {
-  try {
-    const key = `ll:ely_pending_${player.id}`;
-    const cur = world.getDynamicProperty(key) ?? 0;
-    world.setDynamicProperty(key, cur + 1);
-  } catch (e) {
-    console.error(`[ELY-MARK-GACHA] FAILED for ${player?.name}: ${e}`);
-  }
-}
+
 
 /**
  * Buat ItemStack dari item config dan siapkan semua properti:
- * - nameTag (untuk EPIC & LEGENDARY)
  * - applyEnchants (auto berdasarkan rarity)
  * - applySpecificEnchants (dari field enchants — untuk enchanted book)
- * - ll:auction_give (untuk elytra — bypass dragon daily limit)
  */
 function buildStack(item) {
   const stack = new ItemStack(item.id, item.qty ?? 1);
   applyEnchants(stack, item.rarity, item.id);
   applySpecificEnchants(stack, item.enchants);
-  // Set nama kustom untuk EPIC & LEGENDARY agar tampil dengan warna rarity
-  // SKIP untuk elytra — elyStripRename di dragon_boundary akan hapus nameTag apapun
-  // Menambahkan nameTag pada elytra menyebabkan:
-  //   1. Inkonsistensi: tampil "§6Elytra" lalu reversi ke vanilla setelah scan
-  //   2. hasComplexData = true → warning palsu "data custom mungkin hilang" di sell UI
-  //   3. Browse auction menampilkan ⚠ renamed badge palsu
-  if ((item.rarity === "EPIC" || item.rarity === "LEGENDARY") && item.id !== "minecraft:elytra") {
-    try { stack.nameTag = `${R[item.rarity].color}${item.name}`; } catch (_) {}
-  }
-  // [FIX] Elytra dari gacha harus bypass dragon daily limit
-  // Sama seperti elytra dari auction — dragon scan akan confiscate jika ll:count >= 1
-  if (item.id === "minecraft:elytra") {
-    try { stack.setDynamicProperty("ll:auction_give", true); } catch (_) {}
-  }
   return stack;
 }
 
@@ -117,11 +89,7 @@ export function claimPend(p) {
     try {
       const stack = buildStack(item);
       if (inv.addItem(stack)) still.push(item);
-      else {
-        // [FIX] Set player-level DP saat klaim pending elytra
-        if (item.id === "minecraft:elytra") _markAuctionElytra(p);
-        n++;
-      }
+      else n++;
     } catch { still.push(item); }
   }
   savePend(p, still); return n;
@@ -146,11 +114,7 @@ export function applyReward(player, item, type) {
   if (inv) {
     const remaining = inv.addItem(stack);
     if (remaining) {
-      // Inventory penuh — item masuk pending, JANGAN mark (akan di-mark saat claimPend berhasil)
       addPend(player, item);
-    } else {
-      // Item berhasil masuk inventory — mark bypass sekarang
-      if (item.id === "minecraft:elytra") _markAuctionElytra(player);
     }
   } else {
     addPend(player, item);
