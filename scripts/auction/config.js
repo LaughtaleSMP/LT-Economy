@@ -20,7 +20,7 @@ export const CFG = {
   MAX_BUYOUT:       500_000,
   MIN_PRICE:        10,
   DURATION_MS:      24 * 60 * 60 * 1000,   // 24 jam
-  MAX_HIST:         50,
+  MAX_HIST:         100,
   COOLDOWN_TICKS:   60,
   BROADCAST_MIN_PRICE: 0,
   SELL_COOLDOWN_MS:  5 * 60 * 1000,

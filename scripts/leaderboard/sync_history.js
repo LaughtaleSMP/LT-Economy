@@ -1,10 +1,11 @@
 /* ══════════════════════════════════════════════════════════════
    leaderboard/sync_history.js — Push history rows + retention prune
 
-   pushMetricsHistory()  — insert one row per full sync (~288/day)
-   pushEcoHistory()      — insert eco snapshot with anti-dup check
+   pushMetricsHistory()    — insert one row per full sync (~288/day)
+   pushEcoHistory()        — insert eco snapshot with anti-dup check
+   pushAuctionHistory()    — insert auction tx to permanent table
 
-   Both functions:
+   All functions:
    - Fire-and-forget (no await on POST result)
    - Schedule retention prune after successful insert
    - Silent fail (history is non-critical)
@@ -223,3 +224,53 @@ function _pruneWeatherHistory() {
   ];
   httpWithTimeout(delReq).catch(() => {});
 }
+
+// ── Auction history (permanent, unlimited) ──────────────────
+// [§7.4] Fire-and-forget insert to auction_history table.
+// Buffered: collect entries during sync interval, batch-insert.
+let _auctionBuffer = [];
+
+/**
+ * Queue one auction transaction for permanent Supabase storage.
+ * Entries are buffered and flushed during each full sync via flushAuctionHistory().
+ */
+export function pushAuctionHistory(entry) {
+  if (!entry || !entry.type || !entry.seller) return;
+  _auctionBuffer.push({
+    tx_time:   Date.now(),
+    tx_type:   entry.type,
+    item_name: entry.item || "?",
+    item_id:   entry.itemId || "",
+    qty:       Math.max(1, Number(entry.qty) || 1),
+    seller:    entry.seller,
+    buyer:     entry.buyer || "",
+    price:     Math.max(0, Number(entry.price) || 0),
+  });
+}
+
+/** Flush buffered auction entries to Supabase. Called once per full sync. */
+export function flushAuctionHistory() {
+  if (_auctionBuffer.length === 0) return;
+  const batch = _auctionBuffer.splice(0);
+  const req = new HttpRequest(`${SUPABASE_URL}/rest/v1/auction_history`);
+  req.method = HttpRequestMethod.Post;
+  req.body = JSON.stringify(batch);
+  req.headers = [
+    new HttpHeader("apikey", SUPABASE_KEY),
+    new HttpHeader("Authorization", `Bearer ${SUPABASE_KEY}`),
+    new HttpHeader("Content-Type", "application/json"),
+    new HttpHeader("Prefer", "return=minimal"),
+  ];
+  httpWithTimeout(req).then(r => {
+    if (r.status >= 200 && r.status < 300) return;
+    // Insert failed — push back to buffer for next cycle retry [§7.4]
+    console.warn(`[AH] FAIL ${r.status}: ${r.body?.substring(0, 120)}`);
+    _auctionBuffer.unshift(...batch);
+    if (_auctionBuffer.length > 200) _auctionBuffer.length = 200;
+  }).catch(e => {
+    if (!e?.circuitOpen) console.warn("[AH] Error:", e);
+    _auctionBuffer.unshift(...batch);
+    if (_auctionBuffer.length > 200) _auctionBuffer.length = 200;
+  });
+}
+

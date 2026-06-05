@@ -5,6 +5,10 @@ import { CFG } from "../config.js";
 import { getByteLength } from "../../dp_manager.js";
 import { getTierFeePct } from "../../market/tier.js";
 
+// [§7.4] Injected at runtime by sync.js — auction works even without sync module.
+let _pushToSupabase = null;
+export function _injectAuctionSync(fn) { _pushToSupabase = fn; }
+
 // ═══════════════════════════════════════════════════════════
 // DYNAMIC PROPERTY WRAPPER
 // ═══════════════════════════════════════════════════════════
@@ -224,7 +228,30 @@ export function pushHistory(entry) {
 
   hist.unshift({ ...entry, ts: now });
   dp.set(CFG.K_HIST, hist.slice(0, CFG.MAX_HIST));
+
+  // Push to permanent Supabase storage (fire-and-forget buffer)
+  if (_pushToSupabase) _pushToSupabase(entry);
 }
+
+// [FIX] One-time cleanup: remove existing duplicate entries from history.
+// Runs on behavior pack load. No-op if no duplicates found (zero DP writes).
+(function _cleanupDupHistory() {
+  try {
+    const hist = dp.get(CFG.K_HIST, []);
+    if (hist.length < 2) return;
+    const seen = new Set();
+    const cleaned = hist.filter(h => {
+      const k = (h.type || '') + '|' + (h.item || '') + '|' + (h.seller || '') + '|' + (h.buyer || '') + '|' + (h.ts || 0) + '|' + (h.price || 0) + '|' + (h.qty || 1);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (cleaned.length < hist.length) {
+      dp.set(CFG.K_HIST, cleaned);
+      console.log(`[Auction] Cleaned ${hist.length - cleaned.length} duplicate history entries.`);
+    }
+  } catch (e) { console.warn("[Auction] History cleanup:", e); }
+})();
 
 // Cached 60s — hindari re-parse DP berulang. Read-only, no side-effects.
 let _recCache = null, _recCacheTs = 0;

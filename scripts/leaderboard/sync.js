@@ -25,15 +25,19 @@ import { dpRead, dpGet, dpGetChunked } from "./sync_dp.js";
 import { buildServerMetrics, cachedFullExtras, trackWeatherTransition } from "./sync_metrics.js";
 import { buildGachaLBAsync } from "./sync_gacha.js";
 import { updateDynamicPricing, updateEcoPolicy, updateStagflation, cleanupLegacyWtaxDp } from "./sync_pricing.js";
-import { pushMetricsHistory, pushEcoHistory } from "./sync_history.js";
+import { pushMetricsHistory, pushEcoHistory, flushAuctionHistory, pushAuctionHistory } from "./sync_history.js";
 import { buildFeatureGuide } from "./sync_guide.js";
 import { buildExportAll } from "../gacha/utils/export.js";
 import { PT_POOL } from "../gacha/config.js";
 import { CFG as COMBAT_CFG } from "../Combat/config.js";
 import { checkWorldTransition, getWorldId, isBackupSafe, unlockBackup, backupFingerprint, hasBackupChanged, getBackupTs } from "./sync_world_guard.js";
+import { _injectAuctionSync } from "../auction/utils/storage.js";
 
 export { pollTopupQueue } from "./sync_topup.js";
 export { pollRecoveryQueue } from "./sync_recovery.js";
+
+// Wire auction → Supabase bridge (static import, no dynamic import needed)
+try { _injectAuctionSync(pushAuctionHistory); } catch {}
 
 // ── Sync state ──────────────────────────────────────────────
 let _syncing = false;
@@ -218,7 +222,7 @@ function _readWeeklyLb() {
 function _readEconLogs() {
   let bankLog = [], auctionLog = [], gachaLog = [], topupLog = [], landLog = [];
   try { bankLog = dpGet("bank:global_hist", []).slice(-50); } catch {}
-  try { auctionLog = dpGet("auc:hist", []).slice(-50); } catch {}
+  try { auctionLog = dpGet("auc:hist", []).slice(-100); } catch {}
   try { gachaLog = dpGet("g_hist", []).slice(-50); } catch {}
   try { topupLog = dpGetChunked("gacha:topup_log", []).slice(-50); } catch {}
   // Land log: read from _land_hist scoreboard (cross-pack bridge from Mimi Land)
@@ -302,6 +306,7 @@ function _logFullSyncOk(status, entries, gachaLB, onlinePlayers) {
 
 function _postSyncSideEffects(serverMetrics, gachaLB, logs) {
   try { pushMetricsHistory(serverMetrics); } catch {}
+  try { flushAuctionHistory(); } catch {}
 
   if (!gachaLB.summary) return;
 
