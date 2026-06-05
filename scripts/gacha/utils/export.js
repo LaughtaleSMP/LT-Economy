@@ -22,8 +22,7 @@ export function buildExportStringById(playerId) {
   const gem = sb > 0 ? sb : (info.gem ?? 0);
   const tags = bitmaskToPt(info.ptm ?? '0').filter(t => PT_TAG_SET.has(t)).join(',');
   const eq = dpGet(CFG.K_EQ_PITY + playerId, { sr:0, l:0 });
-  const kfx = getKillFx(playerId);
-  const kfxOwned = (kfx.owned || []).filter(o => o !== "Games:coins" && o !== "none");
+  const kfxOwned = info.kfx || [];
   const kfxStr = kfxOwned.map(o => Array.isArray(o) ? JSON.stringify(o) : o).join(",");
   return { name: info.name, str: `${EXPORT_VER}|gem:${gem}|pt:${tags}|eqsr:${eq.sr}|eql:${eq.l}|kfx:${kfxStr}` };
 }

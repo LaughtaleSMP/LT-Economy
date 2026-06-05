@@ -207,7 +207,22 @@ export function getHistory() {
 
 export function pushHistory(entry) {
   const hist = getHistory();
-  hist.unshift({ ...entry, ts: Date.now() });
+  const now = Date.now();
+
+  // [FIX] Guard against duplicate entries from behavior pack restarts.
+  // If an identical entry (same item+seller+type) was pushed within
+  // the last 60s, skip — this is a replay, not a new event.
+  const DUP_WINDOW_MS = 60_000;
+  const isDup = hist.some(h =>
+    h.type === entry.type &&
+    h.item === entry.item &&
+    h.seller === entry.seller &&
+    (h.buyer || "") === (entry.buyer || "") &&
+    h.ts && (now - h.ts) < DUP_WINDOW_MS
+  );
+  if (isDup) return;
+
+  hist.unshift({ ...entry, ts: now });
   dp.set(CFG.K_HIST, hist.slice(0, CFG.MAX_HIST));
 }
 

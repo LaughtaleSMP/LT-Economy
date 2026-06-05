@@ -14,7 +14,8 @@ let _worldId = null;
 let _checkedOnce = false;
 let _isNewWorld = false;
 let _backupSafe = false;
-let _lastFingerprint = "";
+let _lastFingerprint = null;
+let _lastBackupTs = Date.now();
 
 export function getWorldId() {
   if (_worldId) return _worldId;
@@ -97,6 +98,11 @@ export function hasBackupChanged(fp) {
   if (fp === _lastFingerprint) return false;
   _lastFingerprint = fp;
   return true;
+}
+
+export function getBackupTs(changed) {
+  if (changed) _lastBackupTs = Date.now();
+  return _lastBackupTs;
 }
 
 async function _fetchRemoteBackup() {

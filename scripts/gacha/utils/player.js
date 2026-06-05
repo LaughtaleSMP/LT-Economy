@@ -2,6 +2,7 @@ import { system } from "@minecraft/server";
 import { PT_POOL, PT_TAG_SET } from "../config.js";
 import { getPlayerReg, setPlayerReg } from "./storage.js";
 import { getGem, getCoin } from "./scoreboard.js";
+import { getKillFx } from "../../kill_fx.js";
 
 function b36toBigInt(str) {
   let result = 0n;
@@ -43,7 +44,8 @@ export function syncPlayerData(player) {
     _syncCooldown.set(player.id, now);
     const reg = getPlayerReg();
     const ptTags = PT_POOL.filter(p => player.hasTag(p.tag)).map(p => p.tag);
-    reg[player.id] = { name: player.name, gem: getGem(player), coin: getCoin(player), ptm: ptToBitmask(ptTags) };
+    const kfxOwned = (getKillFx(player.id).owned || []).filter(o => o !== "Games:coins" && o !== "none");
+    reg[player.id] = { name: player.name, gem: getGem(player), coin: getCoin(player), ptm: ptToBitmask(ptTags), kfx: kfxOwned };
     setPlayerReg(reg);
   } catch (e) { console.warn("[Gacha] syncPlayerData:", e); }
 }
@@ -63,7 +65,8 @@ export function batchSyncToRegistry(players) {
     const reg = getPlayerReg();
     for (const player of players) {
       const ptTags = PT_POOL.filter(p => player.hasTag(p.tag)).map(p => p.tag);
-      reg[player.id] = { name: player.name, gem: getGem(player), coin: getCoin(player), ptm: ptToBitmask(ptTags) };
+      const kfxOwned = (getKillFx(player.id).owned || []).filter(o => o !== "Games:coins" && o !== "none");
+      reg[player.id] = { name: player.name, gem: getGem(player), coin: getCoin(player), ptm: ptToBitmask(ptTags), kfx: kfxOwned };
       _syncCooldown.set(player.id, system.currentTick);
     }
     if (players.length) setPlayerReg(reg);

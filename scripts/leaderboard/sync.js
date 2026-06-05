@@ -28,10 +28,9 @@ import { updateDynamicPricing, updateEcoPolicy, updateStagflation, cleanupLegacy
 import { pushMetricsHistory, pushEcoHistory } from "./sync_history.js";
 import { buildFeatureGuide } from "./sync_guide.js";
 import { buildExportAll } from "../gacha/utils/export.js";
-import { getKillFx } from "../kill_fx.js";
 import { PT_POOL } from "../gacha/config.js";
 import { CFG as COMBAT_CFG } from "../Combat/config.js";
-import { checkWorldTransition, getWorldId, isBackupSafe, unlockBackup, backupFingerprint, hasBackupChanged } from "./sync_world_guard.js";
+import { checkWorldTransition, getWorldId, isBackupSafe, unlockBackup, backupFingerprint, hasBackupChanged, getBackupTs } from "./sync_world_guard.js";
 
 export { pollTopupQueue } from "./sync_topup.js";
 export { pollRecoveryQueue } from "./sync_recovery.js";
@@ -93,18 +92,30 @@ export async function syncLeaderboard() {
       const filtered = [];
       for (const b of backups) {
         const parts = b.str.split('|');
-        let gem = 0, pt = '';
+        let gem = 0, pt = '', rawKfx = '';
         for (let i = 1; i < parts.length; i++) {
           const ci = parts[i].indexOf(':');
           if (ci < 0) continue;
           const k = parts[i].slice(0, ci), v = parts[i].slice(ci + 1);
           if (k === 'gem') gem = parseInt(v, 10) || 0;
           else if (k === 'pt') pt = v;
+          else if (k === 'kfx') rawKfx = v;
         }
-        // Read killfx directly — avoids corrupting array IDs via naive split
-        const kfx = getKillFx(b.id);
-        const kfxOwned = (kfx.owned || []).filter(o => o !== "Games:coins" && o !== "none");
-        const kfxKeys = kfxOwned.map(o => Array.isArray(o) ? JSON.stringify(o) : o);
+
+        // Bracket-safe split for kfx
+        let kfxKeys = [];
+        if (rawKfx) {
+          kfxKeys = rawKfx.split(',').reduce((acc, chunk) => {
+            if (acc._buf) {
+              acc._buf += "," + chunk;
+              if (chunk.endsWith("]")) { acc.push(acc._buf); acc._buf = null; }
+            } else if (chunk.startsWith("[")) {
+              if (chunk.endsWith("]")) acc.push(chunk); else acc._buf = chunk;
+            } else { acc.push(chunk); }
+            return acc;
+          }, []);
+          delete kfxKeys._buf;
+        }
 
         if (gem > 0 || pt || kfxKeys.length > 0) {
           filtered.push({
@@ -120,18 +131,22 @@ export async function syncLeaderboard() {
         console.warn("[LB-Sync] Backup SKIPPED — new world detected, waiting for recovery");
       } else {
         const fp = backupFingerprint(filtered);
-        if (hasBackupChanged(fp)) {
-          gachaLB.player_backups = filtered;
-          gachaLB._backup_ts = Date.now();
-          // Tag→name maps — web panel can't import config.js so we ship lookup tables
-          const trailMap = {};
-          for (const p of PT_POOL) trailMap[p.tag] = p.name;
-          gachaLB._trail_names = trailMap;
-          const fxMap = {};
-          const _fk = (id) => Array.isArray(id) ? JSON.stringify(id) : id;
-          for (const e of COMBAT_CFG.KILL_EFFECTS) fxMap[_fk(e.id)] = e.name;
-          gachaLB._fx_names = fxMap;
-        }
+        const changed = hasBackupChanged(fp);
+        
+        // Kita HARUS selalu menyertakan data ini di setiap sync.
+        // Karena `gacha_lb` adalah overwrite JSON penuh, jika dihilangkan maka data terhapus.
+        gachaLB.player_backups = filtered;
+        gachaLB._backup_ts = getBackupTs(changed);
+
+        // Tag→name maps
+        const trailMap = {};
+        for (const p of PT_POOL) trailMap[p.tag] = p.name;
+        gachaLB._trail_names = trailMap;
+        
+        const fxMap = {};
+        const _fk = (id) => Array.isArray(id) ? JSON.stringify(id) : id;
+        for (const e of COMBAT_CFG.KILL_EFFECTS) fxMap[_fk(e.id)] = e.name;
+        gachaLB._fx_names = fxMap;
       }
     } catch (e) {
       console.warn(`[LB-Sync] backup build FAILED: ${e?.message || e}`);
