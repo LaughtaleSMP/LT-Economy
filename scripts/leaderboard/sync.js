@@ -31,7 +31,7 @@ import { buildExportAll } from "../gacha/utils/export.js";
 import { PT_POOL } from "../gacha/config.js";
 import { CFG as COMBAT_CFG } from "../Combat/config.js";
 import { checkWorldTransition, getWorldId, isBackupSafe, unlockBackup, backupFingerprint, hasBackupChanged, getBackupTs } from "./sync_world_guard.js";
-import { requestMimiBackup, getMimiTags } from "./sync_mimi.js";
+import { requestMimiBackup, getMimiData, getAllMimiNames } from "./sync_mimi.js";
 import { _injectAuctionSync } from "../auction/utils/storage.js";
 
 export { pollTopupQueue } from "./sync_topup.js";
@@ -128,18 +128,31 @@ export async function syncLeaderboard() {
 
         let mimiKeys = rawMimi ? rawMimi.split(',').filter(Boolean) : [];
 
-        // Merge Mimi Inka customization tags from cross-pack bridge
-        const bridgeTags = getMimiTags(b.name);
-        if (bridgeTags.length) mimiKeys = [...new Set([...mimiKeys, ...bridgeTags])];
+        // Merge Mimi Inka customization data from cross-pack bridge
+        const mimiData = getMimiData(b.name);
 
-        if (gem > 0 || pt || kfxKeys.length > 0 || mimiKeys.length > 0) {
+        if (gem > 0 || pt || kfxKeys.length > 0 || mimiKeys.length > 0 || mimiData) {
           filtered.push({
             id: b.id, name: b.name, data: b.str, online: b.isOnline,
             gem, trails: pt ? pt.split(',').filter(Boolean) : [],
             killfx: kfxKeys,
             mimi: mimiKeys,
+            mimi_data: mimiData,
           });
         }
+      }
+
+      // Inject Mimi-only players not covered by Economy export
+      const seen = new Set(filtered.map(f => f.name));
+      for (const mName of getAllMimiNames()) {
+        if (seen.has(mName)) continue;
+        const md = getMimiData(mName);
+        if (!md) continue;
+        filtered.push({
+          id: '', name: mName, data: '', online: false,
+          gem: 0, trails: [], killfx: [], mimi: [],
+          mimi_data: md,
+        });
       }
 
       // Guard: don't overwrite rich backup with empty new-world data

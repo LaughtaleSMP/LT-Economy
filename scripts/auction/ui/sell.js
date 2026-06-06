@@ -118,7 +118,7 @@ export async function uiSell(player) {
   let recDefault = "";
   if (rec) {
     const ppuLabel = sellQty > 1 ? `\n§8   Per unit: §e${fmt(rec.perUnit)}⛃` : "";
-    recHint = `\n§a ★ Harga Pasar §8(${rec.txCount} transaksi)\n§8   Avg: §e${fmt(rec.avg)}⛃ §8| Min: §e${fmt(rec.min)}⛃ §8| Max: §e${fmt(rec.max)}⛃${ppuLabel}`;
+    recHint = `\n§a ★ Rekomendasi Harga Pasar §8(${rec.txCount} transaksi)\n§8   Avg: §e${fmt(rec.avg)}⛃ §8| Min: §e${fmt(rec.min)}⛃ §8| Max: §e${fmt(rec.max)}⛃${ppuLabel}`;
     // Cap ke MIN_PRICE..MAX_BUYOUT agar default form selalu valid
     recDefault = String(Math.max(CFG.MIN_PRICE, Math.min(rec.avg, CFG.MAX_BUYOUT)));
   }
@@ -265,8 +265,8 @@ export async function uiSell(player) {
   // Mencegah orphan DP accumulation (~98 bytes/elytra, limit 32KB)
   if (itemData.typeId === "minecraft:elytra" && itemData.dynamicProps?.["ll:eid"]) {
     const eid = itemData.dynamicProps["ll:eid"];
-    try { world.setDynamicProperty(`ll:owner_${eid}`, undefined); } catch (_) {}
-    try { world.setDynamicProperty(`ll:when_${eid}`, undefined); } catch (_) {}
+    try { world.setDynamicProperty(`ll:owner_${eid}`, undefined); } catch (_) { }
+    try { world.setDynamicProperty(`ll:when_${eid}`, undefined); } catch (_) { }
     delete itemData.dynamicProps["ll:eid"];
     if (Object.keys(itemData.dynamicProps).length === 0) delete itemData.dynamicProps;
     if (itemData.lore) {
