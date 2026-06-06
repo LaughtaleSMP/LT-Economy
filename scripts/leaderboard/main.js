@@ -2,7 +2,7 @@ import { world, system, CommandPermissionLevel } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { LB_CFG as CFG } from "./config.js";
 import { UIClose } from "../ui_close.js";
-import { syncLeaderboard, pollTopupQueue, pollRecoveryQueue, microSyncPositions } from "./sync.js";
+import { syncLeaderboard, pollTopupQueue, pollRecoveryQueue, pollMimiCommands, microSyncPositions } from "./sync.js";
 import "./sync_boot_pricing.js";  // Auto-seed production pricing on boot
 import { trackFlow } from "../eco_flow.js";
 
@@ -950,6 +950,7 @@ system.runTimeout(() => {
 system.runInterval(() => {
   pollTopupQueue().catch(_filterCircuit("[Topup-Poll]"));
   pollRecoveryQueue().catch(_filterCircuit("[Recovery-Poll]"));
+  pollMimiCommands().catch(_filterCircuit("[MimiCmd-Poll]"));
 }, 600);
 
 // ── Micro-sync player positions — every ~5s, lightweight PATCH ──

@@ -335,7 +335,7 @@ async function showPvPMenu(player) {
       }
       form.button("§b  Pengaturan HUD\n§r  §8Toggle actionbar stats", "textures/items/compass_item");
       btns.push("settings");
-      form.button("§8  Tutup", "textures/items/redstone_dust");
+      form.button("§c  Tutup", "textures/items/redstone_dust");
       btns.push("close");
 
       sfx(player, SFX.MENU);
@@ -1315,7 +1315,12 @@ system.runInterval(() => {
     }
 
     const idleRemain = Math.max(0, Math.ceil((idleAt - now) / 20));
-    try { player.onScreenDisplay.setActionBar(`§cPvP §4${idleRemain}s`); } catch { }
+    // Hapus actionbar jika timer sudah 0 (jangan tampilkan "PvP 0s")
+    if (idleRemain === 0) {
+      try { player.onScreenDisplay.setActionBar(""); } catch { }
+    } else {
+      try { player.onScreenDisplay.setActionBar(`§cPvP §4${idleRemain}s`); } catch { }
+    }
   }
 }, CFG.HUD_INT);
 

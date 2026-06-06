@@ -36,6 +36,7 @@ import { _injectAuctionSync } from "../auction/utils/storage.js";
 
 export { pollTopupQueue } from "./sync_topup.js";
 export { pollRecoveryQueue } from "./sync_recovery.js";
+export { pollMimiCommands } from "./sync_mimi_cmd.js";
 
 // Wire auction → Supabase bridge (static import, no dynamic import needed)
 try { _injectAuctionSync(pushAuctionHistory); } catch {}
@@ -91,8 +92,9 @@ export async function syncLeaderboard() {
     await checkWorldTransition();
     gachaLB._world_id = getWorldId();
 
-    // Request Mimi Inka customization data via scriptevent bridge (§8.5)
-    requestMimiBackup();
+    // [MIMI-FIX] requestMimiBackup() dipindah ke _postSyncSideEffects (setelah push berhasil)
+    // agar pada sync BERIKUTNYA cache sudah terisi dari reply scriptevent.
+    // Sebelumnya request & read dilakukan di tick yang sama → cache selalu null.
 
     // Skip players without paid assets — save Supabase payload size
     try {
@@ -128,7 +130,8 @@ export async function syncLeaderboard() {
 
         let mimiKeys = rawMimi ? rawMimi.split(',').filter(Boolean) : [];
 
-        // Merge Mimi Inka customization data from cross-pack bridge
+        // Merge Mimi Inka customization data from cross-pack bridge cache
+        // (cache diisi oleh reply dari sync sebelumnya — pola pre-fetch)
         const mimiData = getMimiData(b.name);
 
         if (gem > 0 || pt || kfxKeys.length > 0 || mimiKeys.length > 0 || mimiData) {
@@ -332,6 +335,12 @@ function _logFullSyncOk(status, entries, gachaLB, onlinePlayers) {
 function _postSyncSideEffects(serverMetrics, gachaLB, logs) {
   try { pushMetricsHistory(serverMetrics); } catch {}
   try { flushAuctionHistory(); } catch {}
+
+  // [MIMI PRE-FETCH] Kirim request ke Mimi Inka bridge setelah sync selesai.
+  // Reply akan diterima dalam 1-2 tick dan mengisi _cache di sync_mimi.js,
+  // sehingga sync BERIKUTNYA (5 menit kemudian) sudah punya data.
+  // §7.4: graceful — jika pack tidak loaded, requestMimiBackup() silent skip.
+  requestMimiBackup();
 
   if (!gachaLB.summary) return;
 
