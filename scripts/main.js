@@ -20,7 +20,6 @@ import "./welfare/demurrage.js"; // [PhD-v2] Demurrage — carrying cost hoarded
 import "./welfare/stagflation.js"; // Stagflation Detector — auto-stimulus
 import "./store/main.js";    // Store — toko bahan build dengan tier progresif
 import "./insights/baseline.js"; // /lt:baseline — read-only snapshot ekonomi gem (admin)
-import "./eid_items.js";          // Eid Adha — efek spesial item event
 import "./eid_quest.js";          // Eid Adha — quest qurban token system
 
 import { handleWelcome } from "./welcome.js";
@@ -30,7 +29,7 @@ startMonitoring();
 world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
   if (!initialSpawn) return;
   system.runTimeout(() => {
-    try { trackPlayer(player.id); } catch {}
+    try { trackPlayer(player.id); } catch { }
     // Auto-migrate world DP → player DP
     try { migratePlayer(player); } catch (e) { console.warn("[Main] Migration:", e); }
   }, 10);
@@ -40,7 +39,7 @@ world.afterEvents.playerSpawn.subscribe(({ player, initialSpawn }) => {
     try {
       const live = world.getPlayers().find(p => p.id === player.id);
       if (live) handleWelcome(live);
-    } catch {}
+    } catch { }
   }, 160);
 });
 
@@ -134,7 +133,7 @@ function pruneLogEntries() {
             pruned += hist.length - cleaned.length;
           }
         }
-      } catch {}
+      } catch { }
     }
   } catch (e) { console.warn("[LogPrune] bank:hist:", e); }
 
@@ -150,7 +149,7 @@ function pruneLogEntries() {
             pruned += hist.length - cleaned.length;
           }
         }
-      } catch {}
+      } catch { }
     }
   } catch (e) { console.warn("[LogPrune] hist:", e); }
 
