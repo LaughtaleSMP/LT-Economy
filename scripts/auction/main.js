@@ -20,6 +20,7 @@ import { uiSell, uiMyListings } from "./ui/sell.js";
 import { uiAdmin } from "./ui/admin.js";
 import { UIClose } from "../ui_close.js";
 import { trackFlow } from "../eco_flow.js";
+import { isPurgeActive } from "../purge_gate.js";
 
 // ═══════════════════════════════════════════════════════════
 // OPEN AUCTION
@@ -430,6 +431,10 @@ system.beforeEvents.startup.subscribe(init => {
       (origin) => {
         const player = origin.sourceEntity;
         if (!player || typeof player.sendMessage !== "function") return;
+        if (isPurgeActive()) {
+          system.run(() => player.sendMessage("§8[§cAuction§8]§c Dinonaktifkan selama Purge!"));
+          return;
+        }
         if (!checkCooldown(player)) {
           system.run(() => player.sendMessage("§8[§cAuction§8]§c Tunggu sebentar!"));
           return;
@@ -451,6 +456,10 @@ world.beforeEvents.chatSend.subscribe(event => {
   if (msg !== "!auction" && msg !== "auction") return;
   event.cancel = true;
   const player = event.sender;
+  if (isPurgeActive()) {
+    system.run(() => player.sendMessage("§8[§cAuction§8]§c Dinonaktifkan selama Purge!"));
+    return;
+  }
   if (!checkCooldown(player)) {
     system.run(() => player.sendMessage("§8[§cAuction§8]§c Tunggu sebentar!"));
     return;
@@ -466,6 +475,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
   if (ev.id !== "auction:open") return;
   const src = ev.sourceEntity;
   if (!src || typeof src.hasTag !== "function") return;
+  if (isPurgeActive()) return;
   if (activeSessions.has(src.id)) return;
   system.run(() => openAuction(src).catch(e => { if (!e?.isUIClose) console.error("[Auction] error:", e); }));
 });

@@ -16,6 +16,7 @@ import {
 } from "./helpers.js";
 import { startFlushLoop, flushOnLeave, invalidateStorageCache } from "./storage.js";
 import { validateCatalog } from "./catalog.js";
+import { isPurgeActive } from "../purge_gate.js";
 
 // ═══════════════════════════════════════════════════════════
 // COMMAND REGISTRATION
@@ -33,6 +34,11 @@ system.beforeEvents.startup.subscribe(init => {
       (origin) => {
         const player = origin.sourceEntity;
         if (!player || typeof player.sendMessage !== "function") return;
+
+        if (isPurgeActive()) {
+          system.run(() => player.sendMessage("§8[§cStore§8]§c Dinonaktifkan selama Purge!"));
+          return;
+        }
 
         // ── Kill switch check ──
         if (!isStoreEnabled()) {

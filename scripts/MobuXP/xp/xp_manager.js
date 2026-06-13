@@ -9,6 +9,8 @@ import { applySubsidy, SUBSIDY_CFG } from "../../Tax/wealth.js";
 import { getKillSubsidyBoost } from "../../welfare/stagflation.js";
 import { spawnKillEffect, playKillFxSound } from "../../kill_fx.js";
 
+import { isPurgeActive } from "../../purge_gate.js";
+
 const CONFIG_DEFAULTS = {
   xp_multiplier_percent: 200,
   bonus_tiers: [
@@ -542,6 +544,7 @@ function _refreshKillBudget() {
 //   - Skip stack check AND effect when shouldSkipHeavy()
 // ============================================================
 world.afterEvents.entityDie.subscribe((event) => {
+  if (isPurgeActive()) return; // No mob rewards during Purge
   const deadEntity = event.deadEntity;
   if (!deadEntity) return;
 

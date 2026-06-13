@@ -67,9 +67,9 @@ export const MARK = "\u00A70\u00A7r\u00A7k\u00A7r";
 export const R = {
   COMMON:    { color: "§7", label: "Biasa",      glass: "minecraft:gray_stained_glass_pane",   ptW: 55, eqW: 50 },
   UNCOMMON:  { color: "§a", label: "Tak Biasa",   glass: "minecraft:lime_stained_glass_pane",   ptW: 25, eqW: 30 },
-  RARE:      { color: "§9", label: "Langka",      glass: "minecraft:blue_stained_glass_pane",   ptW: 13, eqW: 12 },
-  EPIC:      { color: "§5", label: "Epik",        glass: "minecraft:purple_stained_glass_pane", ptW: 6,  eqW: 2.5 },
-  LEGENDARY: { color: "§6", label: "Legendaris",  glass: "minecraft:yellow_stained_glass_pane", ptW: 1,  eqW: 0.25 },
+  RARE:      { color: "§9", label: "Langka",      glass: "minecraft:blue_stained_glass_pane",   ptW: 13, eqW: 5 },
+  EPIC:      { color: "§5", label: "Epik",        glass: "minecraft:purple_stained_glass_pane", ptW: 6,  eqW: 1.0 },
+  LEGENDARY: { color: "§6", label: "Legendaris",  glass: "minecraft:yellow_stained_glass_pane", ptW: 1,  eqW: 0.08 },
 };
 
 export const PT_POOL = [
@@ -128,16 +128,16 @@ export const EQ_POOL = [
   { id: "minecraft:diamond", name: "Diamond x16", rarity: "UNCOMMON", qty: 16 },
   { id: "minecraft:blaze_rod", name: "Blaze Rod x16", rarity: "UNCOMMON", qty: 16 },
 
-  // ================= RARE (Diamond gear + item langka — "seru!") =================
-  { id: "minecraft:diamond_sword", name: "Pedang Diamond", rarity: "RARE" },
-  { id: "minecraft:diamond_pickaxe", name: "Beliung Diamond", rarity: "RARE" },
-  { id: "minecraft:diamond_axe", name: "Kapak Diamond", rarity: "RARE" },
-  { id: "minecraft:diamond_shovel", name: "Sekop Diamond", rarity: "RARE" },
-  { id: "minecraft:diamond_helmet", name: "Helm Diamond", rarity: "RARE" },
-  { id: "minecraft:diamond_chestplate", name: "Baju Diamond", rarity: "RARE" },
-  { id: "minecraft:diamond_leggings", name: "Celana Diamond", rarity: "RARE" },
-  { id: "minecraft:diamond_boots", name: "Sepatu Diamond", rarity: "RARE" },
-  { id: "minecraft:trident", name: "Trident", rarity: "RARE" },
+  // ================= RARE (Material langka + enchant — "seru!") =================
+  // [Anti-P2W] Tidak kasih gear langsung — player harus craft sendiri.
+  { id: "minecraft:diamond", name: "Diamond x6", rarity: "RARE", qty: 6 },
+  { id: "minecraft:diamond", name: "Diamond x10", rarity: "RARE", qty: 10 },
+  { id: "minecraft:diamond", name: "Diamond x16", rarity: "RARE", qty: 16 },
+  { id: "minecraft:ancient_debris", name: "Ancient Debris x2", rarity: "RARE", qty: 2 },
+  { id: "minecraft:heart_of_the_sea", name: "Heart of the Sea", rarity: "RARE" },
+  { id: "minecraft:nautilus_shell", name: "Nautilus Shell x4", rarity: "RARE", qty: 4 },
+  { id: "minecraft:enchanted_book", name: "Sharpness IV", rarity: "RARE", enchants: [{ id: "sharpness", level: 4 }] },
+  { id: "minecraft:enchanted_book", name: "Protection IV", rarity: "RARE", enchants: [{ id: "protection", level: 4 }] },
   { id: "minecraft:totem_of_undying", name: "Totem Abadi", rarity: "RARE" },
   { id: "minecraft:golden_apple", name: "Apel Emas x8", rarity: "RARE", qty: 8 },
   { id: "minecraft:emerald", name: "Emerald x32", rarity: "RARE", qty: 32 },
@@ -145,12 +145,11 @@ export const EQ_POOL = [
   { id: "minecraft:ghast_tear", name: "Ghast Tear x4", rarity: "RARE", qty: 4 },
   { id: "minecraft:phantom_membrane", name: "Phantom Membrane x8", rarity: "RARE", qty: 8 },
 
-  // ================= EPIC (Netherite tools + rare material — WOW!) =================
-  // [§10.8 P2W] Hanya TOOLS, bukan armor. Armor harus di-craft sendiri (fair play).
-  // [§10.6] Sidegrade: Netherite tool = convenience shortcut, bukan combat dominance.
-  { id: "minecraft:netherite_sword", name: "Pedang Netherite", rarity: "EPIC" },
-  { id: "minecraft:netherite_pickaxe", name: "Beliung Netherite", rarity: "EPIC" },
-  { id: "minecraft:netherite_axe", name: "Kapak Netherite", rarity: "EPIC" },
+  // ================= EPIC (Material premium + enchant langka — WOW!) =================
+  // [Anti-P2W] Material only — player harus craft gear sendiri.
+  { id: "minecraft:netherite_ingot", name: "Netherite Ingot x2", rarity: "EPIC", qty: 2 },
+  { id: "minecraft:ancient_debris", name: "Ancient Debris x6", rarity: "EPIC", qty: 6 },
+  { id: "minecraft:enchanted_book", name: "Efficiency V", rarity: "EPIC", enchants: [{ id: "efficiency", level: 5 }] },
   { id: "minecraft:enchanted_golden_apple", name: "Apel Ajaib x3", rarity: "EPIC", qty: 3 },
   { id: "minecraft:shulker_shell", name: "Shulker Shell x4", rarity: "EPIC", qty: 4 },
   { id: "minecraft:dragon_breath", name: "Dragon Breath x16", rarity: "EPIC", qty: 16 },
@@ -158,13 +157,12 @@ export const EQ_POOL = [
   { id: "minecraft:netherite_scrap", name: "Netherite Scrap x4", rarity: "EPIC", qty: 4 },
 
   // ================= LEGENDARY (Jackpot — broadcast ke server!) =================
-  { id: "minecraft:netherite_block", name: "Blok Netherite", rarity: "LEGENDARY" },
-  { id: "minecraft:mace", name: "Gada", rarity: "LEGENDARY" },
+  // [Anti-P2W] Material + enchant only. Mace & Elytra DIHAPUS (harus boss/exploration).
+  { id: "minecraft:netherite_ingot", name: "Netherite Ingot x4", rarity: "LEGENDARY", qty: 4 },
   { id: "minecraft:enchanted_golden_apple", name: "Apel Ajaib x10", rarity: "LEGENDARY", qty: 10 },
   { id: "minecraft:heavy_core", name: "Heavy Core", rarity: "LEGENDARY" },
   { id: "minecraft:nether_star", name: "Bintang Nether", rarity: "LEGENDARY" },
   { id: "minecraft:beacon", name: "Beacon", rarity: "LEGENDARY" },
-  { id: "minecraft:elytra", name: "Elytra", rarity: "LEGENDARY" },
   { id: "minecraft:enchanted_book", name: "Wind Burst III", rarity: "LEGENDARY", enchants: [{ id: "wind_burst", level: 3 }] },
   { id: "minecraft:enchanted_book", name: "Swift Sneak III", rarity: "LEGENDARY", enchants: [{ id: "swift_sneak", level: 3 }] },
   { id: "minecraft:wither_skeleton_skull", name: "Wither Skull x3", rarity: "LEGENDARY", qty: 3 },

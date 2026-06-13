@@ -9,6 +9,7 @@ import { pGet, pSet, pDel, getOnlinePlayer } from "../player_dp.js";
 import { trackFlow } from "../eco_flow.js";
 import { pointActivity } from "../welfare/demurrage.js";
 import { getNudgeLine } from "../nudge.js";
+import { isPurgeActive } from "../purge_gate.js";
 
 // ═══════════════════════════════════════════════════════════
 // LOCK — mencegah race condition pada transaksi bersamaan
@@ -1048,6 +1049,10 @@ system.beforeEvents.startup.subscribe(init => {
       (origin) => {
         const player = origin.sourceEntity;
         if (!player || typeof player.sendMessage !== "function") return;
+        if (isPurgeActive()) {
+          system.run(() => player.sendMessage("§8[§cBank§8]§c Dinonaktifkan selama Purge!"));
+          return;
+        }
         if (!checkCooldown(player)) {
           system.run(() => player.sendMessage("§8[§cBank§8]§c Tunggu sebentar!"));
           return;
@@ -1066,6 +1071,10 @@ world.beforeEvents.chatSend.subscribe(event => {
   if (msg !== "!bank" && msg.toLowerCase() !== "bank") return;
   event.cancel = true;
   const player = event.sender;
+  if (isPurgeActive()) {
+    system.run(() => player.sendMessage("§8[§cBank§8]§c Dinonaktifkan selama Purge!"));
+    return;
+  }
   if (!checkCooldown(player)) {
     system.run(() => player.sendMessage("§8[§cBank§8]§c Tunggu sebentar!"));
     return;
@@ -1078,6 +1087,7 @@ system.afterEvents.scriptEventReceive.subscribe(ev => {
   if (ev.id !== "bank:open") return;
   const src = ev.sourceEntity;
   if (!src || typeof src.hasTag !== "function") return;
+  if (isPurgeActive()) return;
   if (activeSessions.has(src.id)) return;
   system.run(() => openBankMenu(src).catch(e => { if (!e?.isUIClose) console.error("[Bank] error:", e); }));
 });

@@ -9,6 +9,7 @@ import { getPlayerLBSummary } from "../leaderboard/main.js";
 import { claimUbiIfEligible, buildUbiMessage } from "../welfare/ubi.js";
 import { initActivityOnSpawn, cleanupActivityCache } from "../welfare/demurrage.js";
 import { trackFlow } from "../eco_flow.js";
+import { isPurgeActive } from "../purge_gate.js";
 
 function addCoin(player, amount) {
   try {
@@ -42,6 +43,10 @@ system.beforeEvents.startup.subscribe(({ customCommandRegistry }) => {
   }, (origin) => {
     const player = origin.sourceEntity;
     if (!player || typeof player.sendMessage !== "function") return;
+    if (isPurgeActive()) {
+      system.run(() => player.sendMessage("§8[§cDaily§8]§c Dinonaktifkan selama Purge!"));
+      return;
+    }
     system.run(() => openDailyMenu(player).catch(e => { if (!e?.isUIClose) console.warn("[Daily] UI:", e); }));
     return { status: 0 };
   });

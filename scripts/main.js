@@ -21,6 +21,7 @@ import "./welfare/stagflation.js"; // Stagflation Detector — auto-stimulus
 import "./store/main.js";    // Store — toko bahan build dengan tier progresif
 import "./insights/baseline.js"; // /lt:baseline — read-only snapshot ekonomi gem (admin)
 import "./eid_quest.js";          // Eid Adha — quest qurban token system
+import "./hologram/main.js";      // Hologram — advanced floating text system
 
 import { handleWelcome } from "./welcome.js";
 
@@ -162,4 +163,4 @@ system.runTimeout(() => {
   system.runInterval(pruneLogEntries, LOG_PRUNE_INTERVAL);
 }, 6000);
 
-console.log("[Economy] Loaded: Bank Auction Daily Combat Gacha Leaderboard LiveChat Store WealthTax Welfare[UBI+Demurrage] Welcome Insights[Baseline] EidItems EidQuest");
+console.log("[Economy] Loaded: Bank Auction Daily Combat Gacha Leaderboard LiveChat Store WealthTax Welfare[UBI+Demurrage] Welcome Insights[Baseline] EidItems EidQuest Hologram");

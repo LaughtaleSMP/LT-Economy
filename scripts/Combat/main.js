@@ -1,6 +1,7 @@
 // SLO: Penalty success >= 99.9%. Kill reward atomic >= 99.9%.
 //      Failure -> console.warn, no crash. Max 3 intervals.
 import { world, system, CommandPermissionLevel } from "@minecraft/server";
+import { isPurgeActive } from "../purge_gate.js";
 import { ActionFormData } from "@minecraft/server-ui";
 import { CFG } from "./config.js";
 import { getTPS, getTPSColor } from "../MobuXP/monitor/tps_tracker.js";
@@ -705,6 +706,8 @@ function timeAgo(ts) {
 const _nonPvpFireProtected = new Map(); // victimId -> tick
 
 world.afterEvents.entityHurt.subscribe(ev => {
+  // Skip PvP logic during Purge — all combat is unrestricted
+  if (isPurgeActive()) return;
   const victim = ev.hurtEntity;
   const attacker = ev.damageSource?.damagingEntity;
 
@@ -902,6 +905,15 @@ world.afterEvents.entityHurt.subscribe(ev => {
 world.afterEvents.entityDie.subscribe(ev => {
   const victim = ev.deadEntity;
   if (!victim || victim.typeId !== "minecraft:player") return;
+  // During Purge: skip coin rewards/penalties, but still allow kill FX
+  if (isPurgeActive()) {
+    const killer = ev.damageSource?.damagingEntity;
+    if (killer?.typeId === "minecraft:player" && killer.id !== victim.id) {
+      try { spawnKillEffect(killer, victim.location); } catch {}
+      try { playKillFxSound(killer, victim.location); } catch {}
+    }
+    return;
+  }
 
   let attacker = ev.damageSource?.damagingEntity;
 

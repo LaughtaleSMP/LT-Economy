@@ -1,5 +1,6 @@
 import { world, system, ItemStack, CommandPermissionLevel } from "@minecraft/server";
 import { ActionFormData, ModalFormData, MessageFormData } from "@minecraft/server-ui";
+import { isPurgeActive } from "../purge_gate.js";
 
 import {
   initSecurity,
@@ -416,6 +417,7 @@ function startRolling(container, key, player, type, chestLoc) {
       setSlot(container, key, SLOT.R2, IDS[(off+4) % IDS.length],       "§8...");
     } catch {}
     sfx(player, SFX.TICK, 1.5 - prog * .8);
+    sfxArea(player.location, player.dimension, SFX.TICK, player.id, 10); // play ticking sound to nearby players (radius 10)
     tick += interval;
     if (tick < CFG.ANIM_TICKS) handle = system.runTimeout(step, interval);
   };
@@ -513,14 +515,10 @@ function waitChestOpen(player, block) {
 }
 
 function broadcastRare(pName, items, type) {
-  const pfx = type === "PARTICLE" ? "§8[§5PT§8]§5" : "§8[§6EQ§8]§6";
   for (const item of items) {
     if (item.isDup || R_KEYS.indexOf(item.rarity) < 3) continue;
     const col = R[item.rarity].color;
-    if (item.rarity === "LEGENDARY")
-      world.sendMessage(`§6[★★ LEGENDARY ★★]\n§r${pfx} §e${pName} §fmendapat ${col}${item.name}§r§f!`);
-    else
-      world.sendMessage(`${pfx} ${col}${pName} §fmendapat ${col}${item.name}§r§f! §8[${R[item.rarity].label}]`);
+    world.sendMessage(`§8[Gacha] ${col}${pName} §8> ${col}${item.name}`);
   }
 }
 
@@ -2015,6 +2013,10 @@ system.beforeEvents.startup.subscribe(init => {
       (origin) => {
         const player = origin.sourceEntity;
         if (!player || typeof player.sendMessage !== "function") return;
+        if (isPurgeActive()) {
+          system.run(() => player.sendMessage("§8[§cGacha§8]§c Dinonaktifkan selama Purge!"));
+          return;
+        }
         if (activePlayers.has(player.id) || pendingChestInteract.has(player.id)) return;
         if ((lastPull.get(player.id) ?? 0) + CFG.PULL_CD > system.currentTick) {
           system.run(() => player.sendMessage("§8[§eGacha§8]§e Tunggu sebentar!"));
