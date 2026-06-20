@@ -731,14 +731,14 @@ system.beforeEvents.startup.subscribe(init => {
       {
         name: "lt:npc",
         description: "NPC Market Config - register, remove, skin, help",
-        permissionLevel: CommandPermissionLevel.Any,
+        permissionLevel: CommandPermissionLevel.Admin,
         cheatsRequired: false,
       },
       (origin) => {
         const player = origin.sourceEntity;
         if (!player || typeof player.sendMessage !== "function") return;
-        if (!player.hasTag(ADMIN_TAG)) {
-          system.run(() => player.sendMessage("§8[§cNPC§8]§c Akses ditolak. Butuh tag 'admin'."));
+        if (!player.hasTag("mimi")) {
+          system.run(() => player.sendMessage("§8[§cNPC§8]§c Akses ditolak. Butuh tag 'mimi'."));
           return;
         }
         system.run(async () => {
