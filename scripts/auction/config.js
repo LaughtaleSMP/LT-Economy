@@ -1,0 +1,91 @@
+// auction/config.js
+
+export const CFG = {
+  COIN_OBJ:         "coin",
+  ADMIN_TAG:        "mimi",
+
+  // [PhD] Fee diturunkan: 5% → 3% flat
+  // Sebelumnya: 5% base + tiered (8%/11%/15%) — penjual rugi besar di item mahal
+  // 3% flat = transparan, fair, dan masih effective coin sink
+  LISTING_FEE_PCT:  3,
+  // [PhD] Fee tiers: escalasi berdasarkan harga jual
+  FEE_BRACKETS: [
+    { max: 100, extra: 0 },
+    { max: 1000, extra: 1 },
+    { max: 3000, extra: 2 },
+    { max: Infinity, extra: 3 },
+  ],
+  MAX_LISTINGS:     5,          // per player
+  MAX_GLOBAL:       30,         // total active (30×700B ≈ 21KB, aman di bawah 32KB)
+  MAX_BUYOUT:       500_000,
+  MIN_PRICE:        10,
+  DURATION_MS:      24 * 60 * 60 * 1000,   // 24 jam
+  MAX_HIST:         100,
+  COOLDOWN_TICKS:   60,
+  BROADCAST_MIN_PRICE: 0,
+  SELL_COOLDOWN_MS:  5 * 60 * 1000,
+  FIRST_SALE_BONUS: 500,
+  PRUNE_INTERVAL:   200,
+  OLD_RETAIN_MS:    2 * 24 * 3600_000,  // hapus sold/expired setelah 2 hari
+  DP_MAX_BYTES:     30_000,     // batas aman DP (32KB - margin)
+
+  // Auction / Bidding War
+  MIN_BID_INCREMENT:  50,                  // min increment absolut
+  BID_INCREMENT_PCT:  10,                  // min increment % dari current bid
+  ANTI_SNIPE_MS:      5 * 60 * 1000,      // extend 5 menit
+  ANTI_SNIPE_THRESHOLD_MS: 5 * 60 * 1000, // threshold sebelum expired
+
+  K_LISTINGS:       "auc:list",
+  K_HIST:           "auc:hist",
+  K_NOTIF:          "auc:notif:",
+  K_PEND_ITEMS:     "auc:pend:",
+  K_PEND_COIN:      "auc:pend_coin:",
+  K_TX:             "auc:tx:",           // transaction journal per player
+  K_SETTINGS:       "auc:cfg",
+
+  // UI Design Tokens — matching Daily System premium style
+  HR:       "§8═══════════════════",
+  HR_THIN:  "§8───────────────────",
+  SP:       "",
+};
+
+export const SFX = {
+  OPEN:   { id: "random.click",   pitch: 1.3, vol: 0.7 },
+  BUY:    { id: "random.orb",     pitch: 0.8, vol: 1.0 },
+  SOLD:   { id: "random.levelup", pitch: 1.0, vol: 1.0 },
+  LIST:   { id: "note.pling",     pitch: 1.2, vol: 0.8 },
+  CANCEL: { id: "note.bass",      pitch: 0.6, vol: 0.8 },
+  ADMIN:  { id: "random.levelup", pitch: 1.8, vol: 1.0 },
+  OFFER:  { id: "note.pling",     pitch: 1.0, vol: 0.8 },
+  BID:    { id: "note.pling",     pitch: 1.5, vol: 0.9 },
+  OUTBID: { id: "note.bass",      pitch: 0.8, vol: 0.9 },
+};
+
+// ═══════════════════════════════════════════════════════════
+// KATEGORI ITEM — untuk browse per kategori
+// Diurutkan berdasarkan prioritas match (pertama yang cocok menang).
+// ═══════════════════════════════════════════════════════════
+export const CATEGORIES = [
+  { id: "weapon",  label: "Senjata",        color: "§c",
+    tex: "textures/items/diamond_sword",
+    re: /sword|_bow$|bow$|crossbow|trident|mace/ },
+  { id: "armor",   label: "Armor",          color: "§9",
+    tex: "textures/items/diamond_chestplate",
+    re: /helmet|chestplate|leggings|boots|turtle_shell|elytra|shield/ },
+  { id: "tool",    label: "Tools",          color: "§a",
+    tex: "textures/items/diamond_pickaxe",
+    re: /pickaxe|_axe|shovel|hoe|shears|fishing_rod|flint_and_steel|brush|spyglass|compass|clock|lead|name_tag/ },
+  { id: "block",   label: "Blok & Material", color: "§6",
+    tex: "textures/blocks/gold_block",
+    re: /stone|cobble|dirt|sand|gravel|log|wood|plank|wool|concrete|glass|brick|ore|deepslate|ingot|nugget|raw_iron|raw_gold|raw_copper|diamond$|emerald$|amethyst|copper$|quartz|obsidian|netherrack|basalt|clay|dripstone|calcite|tuff/ },
+  { id: "food",    label: "Makanan",        color: "§e",
+    tex: "textures/items/apple_golden",
+    re: /apple|bread|beef|pork|chicken|mutton|rabbit|cod|salmon|potato|carrot|melon_slice|cookie|cake|pumpkin_pie|stew|golden_apple|enchanted_golden_apple|sweet_berries|glow_berries|dried_kelp|cooked_|beetroot|honey_bottle/ },
+  { id: "potion",  label: "Potion & Efek",  color: "§d",
+    tex: "textures/items/potion_bottle_drinkable",
+    re: /potion|splash_potion|lingering_potion|tipped_arrow|totem|ender_pearl|blaze_powder|ghast_tear|magma_cream|phantom_membrane|brewing_stand|ender_eye/ },
+];
+
+/** ID kategori fallback untuk item yang tidak cocok regex manapun */
+export const CAT_OTHER    = { id: "other",     label: "Lainnya",   color: "§f", tex: "textures/items/ender_eye" };
+export const CAT_ENCHANTED = { id: "enchanted", label: "Enchanted", color: "§5", tex: "textures/items/book_enchanted" };

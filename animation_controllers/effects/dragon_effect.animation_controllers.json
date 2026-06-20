@@ -1,0 +1,27 @@
+{
+  "format_version": "1.10.0",
+  "animation_controllers": {
+    "controller.animation.fireball_effect": {
+      "initial_state": "effect_fireball",
+      "states": {
+        "effect_fireball": {
+          "animations": [
+            "fireball_timer"
+          ],
+          "on_entry": [
+            "variable.timer = query.life_time;"
+          ],
+          "on_exit": [
+            "@s active_aoe_base"
+          ],
+          "transitions": [
+            {
+              "no_effect": "query.life_time - (variable.timer ?? query.life_time) > 2 || query.skin_id != 6"
+            }
+          ]
+        },
+        "no_effect": {}
+      }
+    }
+  }
+}

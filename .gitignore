@@ -1,0 +1,23 @@
+# ══════════════════════════════════════════════════════════════
+# LT-Economy .gitignore
+# ══════════════════════════════════════════════════════════════
+
+# === SECRETS — JANGAN PERNAH PUSH KE GIT ===
+# Service role key Supabase (bypass RLS)
+**/secrets.js
+**/secrets.ts
+
+# Environment files
+.env
+.env.*
+
+# === Build artifacts ===
+scripts.zip
+
+# === IDE / OS ===
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store

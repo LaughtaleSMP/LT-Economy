@@ -1,0 +1,17 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.killfx_fireball.timer": {
+      "loop": true,
+      "animation_length": 0.6666666666666666,
+      "timeline": {
+        "0": [
+          "/summon lt:killfx_fireball",
+          "/playsound mob.blaze.shoot @a[r=48] ~ ~ ~ 0.8 1.3",
+          "/playsound fire.ignite @a[r=48] ~ ~ ~ 0.6 0.8",
+          "/playsound mob.enderdragon.flap @a[r=48] ~ ~3 ~ 0.4 0.6"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "lt:market_npc",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false,
+      "properties": {
+        "lt:skin": { "type": "int", "range": [0, 5], "default": 0, "client_sync": true },
+        "lt:npc_scale": { "type": "int", "range": [1, 5], "default": 3, "client_sync": true },
+        "lt:nametag_h": { "type": "int", "range": [1, 20], "default": 10, "client_sync": false },
+        "lt:happy": { "type": "bool", "default": false, "client_sync": true }
+      }
+    },
+    "component_groups": {
+      "lt:normal_model": { "minecraft:collision_box": { "width": 0.6, "height": 1.8 } },
+      "lt:h1":  { "minecraft:collision_box": { "width": 0.4, "height": 0.5 } },
+      "lt:h2":  { "minecraft:collision_box": { "width": 0.4, "height": 0.6 } },
+      "lt:h3":  { "minecraft:collision_box": { "width": 0.4, "height": 0.7 } },
+      "lt:h4":  { "minecraft:collision_box": { "width": 0.4, "height": 0.8 } },
+      "lt:h5":  { "minecraft:collision_box": { "width": 0.4, "height": 0.9 } },
+      "lt:h6":  { "minecraft:collision_box": { "width": 0.4, "height": 1.0 } },
+      "lt:h7":  { "minecraft:collision_box": { "width": 0.45, "height": 1.1 } },
+      "lt:h8":  { "minecraft:collision_box": { "width": 0.45, "height": 1.2 } },
+      "lt:h9":  { "minecraft:collision_box": { "width": 0.45, "height": 1.3 } },
+      "lt:h10": { "minecraft:collision_box": { "width": 0.45, "height": 1.4 } },
+      "lt:h11": { "minecraft:collision_box": { "width": 0.5, "height": 1.5 } },
+      "lt:h12": { "minecraft:collision_box": { "width": 0.5, "height": 1.6 } },
+      "lt:h13": { "minecraft:collision_box": { "width": 0.5, "height": 1.7 } },
+      "lt:h14": { "minecraft:collision_box": { "width": 0.5, "height": 1.8 } },
+      "lt:h15": { "minecraft:collision_box": { "width": 0.55, "height": 1.9 } },
+      "lt:h16": { "minecraft:collision_box": { "width": 0.55, "height": 2.0 } },
+      "lt:h17": { "minecraft:collision_box": { "width": 0.55, "height": 2.1 } },
+      "lt:h18": { "minecraft:collision_box": { "width": 0.6, "height": 2.2 } },
+      "lt:h19": { "minecraft:collision_box": { "width": 0.6, "height": 2.3 } },
+      "lt:h20": { "minecraft:collision_box": { "width": 0.6, "height": 2.4 } }
+    },
+    "components": {
+      "minecraft:type_family": { "family": ["npc", "market"] },
+      "minecraft:collision_box": { "width": 0.6, "height": 1.8 },
+      "minecraft:health": { "value": 20, "max": 20 },
+      "minecraft:damage_sensor": { "triggers": [{ "deals_damage": false, "cause": "all" }] },
+      "minecraft:pushable": { "is_pushable": false, "is_pushable_by_piston": false },
+      "minecraft:knockback_resistance": { "value": 1.0 },
+      "minecraft:physics": { "has_gravity": true, "has_collision": true },
+      "minecraft:movement": { "value": 0 },
+      "minecraft:navigation.walk": { "can_walk": false, "avoid_water": true },
+      "minecraft:fire_immune": true,
+      "minecraft:persistent": {},
+      "minecraft:nameable": { "always_show": true, "allow_name_tag_renaming": false },
+      "minecraft:behavior.look_at_player": { "priority": 0, "look_distance": 6.0, "probability": 0.02 },
+      "minecraft:conditional_bandwidth_optimization": {}
+    },
+    "events": {
+      "lt:set_normal_model": {
+        "add": { "component_groups": ["lt:normal_model"] },
+        "remove": { "component_groups": ["lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"] }
+      },
+      "lt:h1":  { "add": {"component_groups":["lt:h1"]},  "remove": {"component_groups":["lt:normal_model","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h2":  { "add": {"component_groups":["lt:h2"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h3":  { "add": {"component_groups":["lt:h3"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h4":  { "add": {"component_groups":["lt:h4"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h5":  { "add": {"component_groups":["lt:h5"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h6":  { "add": {"component_groups":["lt:h6"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h7":  { "add": {"component_groups":["lt:h7"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h8":  { "add": {"component_groups":["lt:h8"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h9":  { "add": {"component_groups":["lt:h9"]},  "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h10": { "add": {"component_groups":["lt:h10"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h11": { "add": {"component_groups":["lt:h11"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h12": { "add": {"component_groups":["lt:h12"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h13": { "add": {"component_groups":["lt:h13"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h14": { "add": {"component_groups":["lt:h14"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h15": { "add": {"component_groups":["lt:h15"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h16","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h16": { "add": {"component_groups":["lt:h16"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h17","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h17": { "add": {"component_groups":["lt:h17"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h18","lt:h19","lt:h20"]} },
+      "lt:h18": { "add": {"component_groups":["lt:h18"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h19","lt:h20"]} },
+      "lt:h19": { "add": {"component_groups":["lt:h19"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h20"]} },
+      "lt:h20": { "add": {"component_groups":["lt:h20"]}, "remove": {"component_groups":["lt:normal_model","lt:h1","lt:h2","lt:h3","lt:h4","lt:h5","lt:h6","lt:h7","lt:h8","lt:h9","lt:h10","lt:h11","lt:h12","lt:h13","lt:h14","lt:h15","lt:h16","lt:h17","lt:h18","lt:h19"]} }
+    }
+  }
+}

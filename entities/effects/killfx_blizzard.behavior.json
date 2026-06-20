@@ -1,0 +1,82 @@
+{
+  "format_version": "1.16.1",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "lt:killfx_blizzard",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "animations": {
+        "effect": "controller.animation.killfx_blizzard_effect"
+      },
+      "scripts": {
+        "animate": [
+          "effect"
+        ]
+      }
+    },
+    "component_groups": {
+      "despawn_group": {
+        "minecraft:instant_despawn": {}
+      },
+      "despawn_timer": {
+        "minecraft:timer": {
+          "time": 1.0,
+          "time_down_event": {
+            "event": "despawn",
+            "target": "self"
+          }
+        },
+        "minecraft:skin_id": {
+          "value": 0
+        }
+      }
+    },
+    "components": {
+      "minecraft:conditional_bandwidth_optimization": {},
+      "minecraft:timer": {
+        "time": 6.0,
+        "time_down_event": {
+          "event": "despawn",
+          "target": "self"
+        }
+      },
+      "minecraft:skin_id": {
+        "value": 3
+      },
+      "minecraft:damage_sensor": {
+        "triggers": [
+          {
+            "deals_damage": false
+          }
+        ]
+      },
+      "minecraft:knockback_resistance": {
+        "value": 1000.0
+      },
+      "minecraft:fire_immune": {},
+      "minecraft:scale": {
+        "value": 1.0
+      },
+      "minecraft:collision_box": {
+        "width": 0.0,
+        "height": 0.0
+      }
+    },
+    "events": {
+      "despawn": {
+        "add": {
+          "component_groups": [
+            "despawn_group"
+          ]
+        }
+      },
+      "active_aoe_base": {
+        "add": {
+          "component_groups": [
+            "despawn_timer"
+          ]
+        }
+      }
+    }
+  }
+}

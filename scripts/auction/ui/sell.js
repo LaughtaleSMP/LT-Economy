@@ -1,0 +1,576 @@
+// auction/ui_sell.js — UI: Jual Item & Listing Saya
+
+import { world, system } from "@minecraft/server";
+import { ActionFormData, ModalFormData, MessageFormData } from "@minecraft/server-ui";
+import { CFG, SFX } from "../config.js";
+import {
+  getActiveListings, getListings, addListing, updateListing, removeListing,
+  getPlayerActiveCount, calcFee, getFee, genId, pushHistory,
+  pushNotif, addPendingItem, addPendingCoin, claimPendingCoin,
+  getPendingItems, savePendingItems, writeTx, clearTx,
+  getPriceRecommendation,
+} from "../utils/storage.js";
+import { displayName, enchantSummary, serializeItem, giveItem, giveItemFromListing, returnItemToOwner, freeSlots, takeItemFromSlot, takePartialFromSlot, cacheItemClone, removeCachedClone, hasComplexData } from "../utils/items.js";
+import { getCoin, setCoin, addCoin, withLock, fmt, timeLeft, playSfx, checkSellCooldown, setSellCooldown, hasFirstSaleBonus, markFirstSale } from "../utils/helpers.js";
+import { UIClose } from "../../ui_close.js";
+import { trackFlow } from "../../eco_flow.js";
+
+// ═══════════════════════════════════════════════════════════
+// UI: JUAL ITEM
+// ═══════════════════════════════════════════════════════════
+export async function uiSell(player) {
+  const cdSec = checkSellCooldown(player);
+  if (cdSec > 0) {
+    const m = Math.floor(cdSec / 60), s = cdSec % 60;
+    await new ActionFormData()
+      .title("  Jual Item  §r")
+      .body(`${CFG.HR}§c Tunggu §f${m}m ${s}s §clagi untuk jual item berikutnya.\n${CFG.HR}`)
+      .button("§f Kembali").show(player);
+    return;
+  }
+  const count = getPlayerActiveCount(player.id);
+  if (count >= CFG.MAX_LISTINGS) {
+    await new ActionFormData()
+      .title("  Jual Item  §r")
+      .body(`${CFG.HR}§c Kamu sudah punya §f${count}§c listing aktif (maks ${CFG.MAX_LISTINGS}).\n§8 Batalkan listing lama dulu.\n${CFG.HR}`)
+      .button("§f Kembali").show(player);
+    return;
+  }
+  if (getActiveListings().length >= CFG.MAX_GLOBAL) {
+    await new ActionFormData()
+      .title("  Jual Item  §r")
+      .body(`${CFG.HR}§c Auction house penuh (${CFG.MAX_GLOBAL} listing).\n§8 Coba lagi nanti.\n${CFG.HR}`)
+      .button("§f Kembali").show(player);
+    return;
+  }
+
+  // Step 1: Pilih item dari inventory
+  const inv = player.getComponent("minecraft:inventory")?.container;
+  if (!inv) return;
+
+  const slots = [];
+  for (let i = 0; i < inv.size; i++) {
+    const item = inv.getItem(i);
+    if (item) slots.push({ slot: i, item });
+  }
+
+  if (!slots.length) {
+    await new ActionFormData()
+      .title("  Jual Item  §r")
+      .body(`${CFG.HR}§c Inventory kosong.\n${CFG.HR}`)
+      .button("§f Kembali").show(player);
+    return;
+  }
+
+  const form1 = new ActionFormData()
+    .title("§8 ♦ §eJUAL ITEM§r §8♦ §r")
+    .body(`${CFG.HR}\n§e  ★ J U A L   I T E M\n§8 Fee §8── §e${getFee()}%% §8(dipotong saat laku)\n${CFG.HR}`);
+
+  for (const s of slots) {
+    const enc = (() => { try { const e = s.item.getComponent("minecraft:enchantable"); return e?.getEnchantments()?.length > 0; } catch { return false; } })();
+    const name = displayName(serializeItem(s.item));
+    const qty = s.item.amount > 1 ? ` x${s.item.amount}` : "";
+    form1.button(`§f  ${name}${qty}${enc ? " §dEnch" : ""}\n§r  §8Slot ${s.slot}`);
+  }
+  form1.button("§6  Kembali", "textures/items/arrow");
+
+  const res1 = await form1.show(player);
+  if (res1.canceled || res1.selection === slots.length) return;
+
+  const chosen = slots[res1.selection];
+  const itemCheck = inv.getItem(chosen.slot);
+  if (!itemCheck) { player.sendMessage("§8[§cAuction§8]§c Item sudah tidak ada di slot itu."); return; }
+
+  const previewData = serializeItem(itemCheck);
+  const itemLabel = displayName(previewData);
+  const totalAmount = itemCheck.amount;
+
+  // Step 2: Pilih quantity (hanya jika stackable & amount > 1)
+  let sellQty = totalAmount;
+
+  if (totalAmount > 1) {
+    const res1b = await new ModalFormData()
+      .title(`  Jumlah — ${itemLabel}  §r`)
+      .slider(
+        `§6 Item §8» §e${itemLabel}\n§6 Stok §8» §f${totalAmount} §8di slot ini\n§8 Geser untuk pilih jumlah yang dijual:`,
+        1, totalAmount, { valueStep: 1, defaultValue: totalAmount }
+      )
+      .show(player);
+
+    if (res1b.canceled) return;
+
+    sellQty = Math.floor(Number(res1b.formValues?.[0] ?? totalAmount));
+    if (!Number.isFinite(sellQty) || sellQty < 1) sellQty = 1;
+    if (sellQty > totalAmount) sellQty = totalAmount;
+
+    const recheck = inv.getItem(chosen.slot);
+    if (!recheck || recheck.amount < sellQty) {
+      player.sendMessage("§8[§cAuction§8]§c Item berubah! Coba lagi.");
+      return;
+    }
+  }
+
+  const qtyLabel = sellQty > 1 ? ` x${sellQty}` : "";
+
+  // Price recommendation dari riwayat transaksi (read-only, no side-effect)
+  const rec = getPriceRecommendation(itemCheck.typeId, sellQty);
+  let recHint = "";
+  let recDefault = "";
+  if (rec) {
+    const ppuLabel = sellQty > 1 ? `\n§8   Per unit: §e${fmt(rec.perUnit)}⛃` : "";
+    recHint = `\n§a ★ Rekomendasi Harga Pasar §8(${rec.txCount} transaksi)\n§8   Avg: §e${fmt(rec.avg)}⛃ §8| Min: §e${fmt(rec.min)}⛃ §8| Max: §e${fmt(rec.max)}⛃${ppuLabel}`;
+    // Cap ke MIN_PRICE..MAX_BUYOUT agar default form selalu valid
+    recDefault = String(Math.max(CFG.MIN_PRICE, Math.min(rec.avg, CFG.MAX_BUYOUT)));
+  }
+
+  // Step 3: Pilih mode — Buyout atau Auction
+  const modeForm = new ActionFormData()
+    .title("§8 ♦ §eMODE§r §8♦ §r")
+    .body(`${CFG.HR}\n§8 Pilih mode listing untuk\n§f ${itemLabel}${qtyLabel}\n${CFG.HR}`);
+  modeForm.button(`§e  Buyout\n§r  §8Harga tetap, beli langsung`, "textures/items/emerald");
+  modeForm.button(`§b  Auction\n§r  §8Lelang naik, bid war`, "textures/items/diamond");
+  modeForm.button("§6  Batal", "textures/items/arrow");
+
+  const modeRes = await modeForm.show(player);
+  if (modeRes.canceled || modeRes.selection === 2) return;
+  const isAuction = modeRes.selection === 1;
+
+  let price = 0, startBid = 0, buyoutPrice = 0, fee = 0;
+
+  if (!isAuction) {
+    // Step 4a: Buyout — Input harga
+    const res2 = await new ModalFormData()
+      .title(`  Harga — ${itemLabel}  §r`)
+      .textField(
+        `§6 Item   §8» §e${itemLabel}${qtyLabel}\n§f Tentukan harga buyout §8(total)\n§8 Min: §e${fmt(CFG.MIN_PRICE)} §8| Maks: §e${fmt(CFG.MAX_BUYOUT)}\n§6 Fee §8» §e${getFee()}%% §8dipotong dari saldo${recHint}`,
+        rec ? `Rekomendasi: ${rec.avg}` : "Contoh: 1000", { defaultValue: recDefault }
+      )
+      .show(player);
+    if (res2.canceled) return;
+
+    price = Math.floor(Number(String(res2.formValues?.[0] ?? "").trim()));
+    if (!Number.isFinite(price) || price < CFG.MIN_PRICE) {
+      player.sendMessage(`§8[§cAuction§8]§c Harga minimal §f${fmt(CFG.MIN_PRICE)} Koin.`); return;
+    }
+    if (price > CFG.MAX_BUYOUT) {
+      player.sendMessage(`§8[§cAuction§8]§c Harga maks §f${fmt(CFG.MAX_BUYOUT)} Koin.`); return;
+    }
+    fee = calcFee(price, player);
+  } else {
+    // Step 4b: Auction — Input starting bid + buyout
+    const recStartHint = rec ? `\n§a ★ Rekomendasi: §e${fmt(rec.min)}⛃ §8- §e${fmt(rec.avg)}⛃ §8(${rec.txCount}tx)` : "";
+    const recStartDefault = rec ? String(Math.max(CFG.MIN_PRICE, rec.min)) : "";
+    const res2 = await new ModalFormData()
+      .title(`  Auction — ${itemLabel}  §r`)
+      .textField(
+        `§6 Item §8» §e${itemLabel}${qtyLabel}\n§f Tentukan starting bid\n§8 Min: §e${fmt(CFG.MIN_PRICE)}${recStartHint}`,
+        rec ? `Rekomendasi: ${Math.max(CFG.MIN_PRICE, rec.min)}` : "Contoh: 500", { defaultValue: recStartDefault }
+      )
+      .textField(
+        `§f Buyout Price §8(opsional)\n§8 Harga beli langsung tanpa nunggu.\n§8 Kosongkan atau 0 = tanpa buyout.`,
+        "0 = tanpa buyout", { defaultValue: rec ? String(rec.avg) : "0" }
+      )
+      .show(player);
+    if (res2.canceled) return;
+
+    startBid = Math.floor(Number(String(res2.formValues?.[0] ?? "").trim()));
+    buyoutPrice = Math.floor(Number(String(res2.formValues?.[1] ?? "0").trim()));
+    if (!Number.isFinite(startBid) || startBid < CFG.MIN_PRICE) {
+      player.sendMessage(`§8[§cAuction§8]§c Starting bid minimal §f${fmt(CFG.MIN_PRICE)} Koin.`); return;
+    }
+    if (!Number.isFinite(buyoutPrice)) buyoutPrice = 0;
+    if (buyoutPrice > 0 && buyoutPrice <= startBid) {
+      player.sendMessage("§8[§cAuction§8]§c Buyout harus lebih besar dari starting bid!"); return;
+    }
+    if (buyoutPrice > CFG.MAX_BUYOUT) {
+      player.sendMessage(`§8[§cAuction§8]§c Buyout maks §f${fmt(CFG.MAX_BUYOUT)} Koin.`); return;
+    }
+    price = buyoutPrice; // 0 if no buyout
+    fee = calcFee(startBid, player);
+  }
+
+
+  // Step 5: Konfirmasi
+  const ench = enchantSummary(previewData);
+  let confirmBody = `${CFG.HR}\n§e  ★ K O N F I R M A S I\n${CFG.HR}\n`;
+  if (isAuction) {
+    confirmBody += `  §eMode    §8── §b⚡ Auction\n`;
+    confirmBody += `  §eItem    §8── §f${itemLabel}${qtyLabel}\n`;
+    if (ench) confirmBody += `  §eEnchant §8── §d${ench}\n`;
+    confirmBody += `  §eStart   §8── §e${fmt(startBid)}⛃\n`;
+    confirmBody += buyoutPrice > 0
+      ? `  §eBuyout  §8── §e${fmt(buyoutPrice)}⛃\n`
+      : `  §eBuyout  §8── §8Tidak ada\n`;
+  } else {
+    confirmBody += `  §eMode    §8── §e⛃ Buyout\n`;
+    confirmBody += `  §eItem    §8── §f${itemLabel}${qtyLabel}\n`;
+    if (ench) confirmBody += `  §eEnchant §8── §d${ench}\n`;
+    confirmBody += `  §eHarga   §8── §e${fmt(price)}⛃\n`;
+  }
+  confirmBody += `  §eFee     §8── §c${getFee()}%% §8(dipotong saat laku)\n`;
+  confirmBody += `  §eDurasi  §8── §f24 jam\n`;
+  confirmBody += `${CFG.HR}\n`;
+  // Warning untuk item kompleks (banner patterns, dll)
+  const itemForCheck = inv.getItem(chosen.slot);
+  if (itemForCheck && hasComplexData(itemForCheck)) {
+    confirmBody += `§c  ! PERHATIAN\n`;
+    confirmBody += `§8  Item ini punya data custom §7(patterns/warna)\n`;
+    confirmBody += `§8  yang tersimpan di memori server.\n`;
+    confirmBody += `§8  Jika server §crestart §8saat item di-listing,\n`;
+    confirmBody += `§8  data custom §cmungkin hilang§8.\n`;
+    confirmBody += `§8  Disarankan jual/cancel §asesi yang sama§8.\n`;
+    confirmBody += `${CFG.HR}\n`;
+  }
+  if (sellQty < totalAmount) {
+    confirmBody += `§8 ${sellQty} item diambil dari slot. Sisa ${totalAmount - sellQty} tetap di inventory.\n`;
+  } else {
+    confirmBody += `§8 Item akan diambil dari inventory.\n`;
+  }
+  confirmBody += `§8 Fee dipotong otomatis dari hasil penjualan.\n`;
+  confirmBody += `${CFG.HR}`;
+
+  const confirm = await new MessageFormData()
+    .title("  Konfirmasi Listing  §r")
+    .body(confirmBody)
+    .button1("§f Batal").button2("§a Pasang Listing").show(player);
+
+  if (confirm.canceled || confirm.selection !== 1) return;
+
+  // Execute
+  const finalItem = inv.getItem(chosen.slot);
+  if (!finalItem) { player.sendMessage("§8[§cAuction§8]§c Item sudah tidak ada!"); return; }
+  if (finalItem.typeId !== previewData.typeId) { player.sendMessage("§8[§cAuction§8]§c Item berubah! Coba lagi."); return; }
+  if (finalItem.amount < sellQty) { player.sendMessage("§8[§cAuction§8]§c Jumlah item berubah! Coba lagi."); return; }
+
+  const listingId = genId();
+
+  // Cache clone SEBELUM item diambil dari inventory
+  // Ini mempreservasi banner patterns, dye colors, dan data internal lainnya
+  cacheItemClone(listingId, finalItem);
+
+  const preItemData = serializeItem(finalItem);
+  preItemData.amount = sellQty;
+
+  writeTx(player.id, { type: "sell", listingId, itemData: preItemData, fee });
+
+  const itemData = takePartialFromSlot(player, chosen.slot, sellQty);
+  if (!itemData) {
+    clearTx(player.id);
+    removeCachedClone(listingId);
+    player.sendMessage("§8[§cAuction§8]§c Gagal mengambil item.");
+    return;
+  }
+
+  // Elytra passport cleanup: purge world DPs dan strip ll:eid dari serialized data
+  // Mencegah orphan DP accumulation (~98 bytes/elytra, limit 32KB)
+  if (itemData.typeId === "minecraft:elytra" && itemData.dynamicProps?.["ll:eid"]) {
+    const eid = itemData.dynamicProps["ll:eid"];
+    try { world.setDynamicProperty(`ll:owner_${eid}`, undefined); } catch (_) { }
+    try { world.setDynamicProperty(`ll:when_${eid}`, undefined); } catch (_) { }
+    delete itemData.dynamicProps["ll:eid"];
+    if (Object.keys(itemData.dynamicProps).length === 0) delete itemData.dynamicProps;
+    if (itemData.lore) {
+      itemData.lore = itemData.lore.filter(l => !l.startsWith("\u00A7r\u00A70ll:"));
+      if (!itemData.lore.length) delete itemData.lore;
+    }
+  }
+
+  const listing = {
+    id: listingId,
+    sellerId: player.id,
+    sellerName: player.name,
+    itemData,
+    price,
+    fee,
+    // Buyout offer fields
+    offerId: null,
+    offerName: null,
+    offerAmount: 0,
+    // Auction fields
+    mode: isAuction ? "auction" : "buyout",
+    startBid: isAuction ? startBid : 0,
+    currentBid: 0,
+    bidderId: null,
+    bidderName: null,
+    bidCount: 0,
+    // Timestamps
+    createdAt: Date.now(),
+    expiresAt: Date.now() + CFG.DURATION_MS,
+    status: "active",
+    buyerId: null,
+    buyerName: null,
+  };
+
+  addListing(listing);
+  clearTx(player.id);
+  setSellCooldown(player);
+
+  playSfx(player, SFX.LIST);
+  const enchBadge = previewData.enchantments?.length > 0 ? " §dEnch" : "";
+  if (isAuction) {
+    player.sendMessage(
+      `§8[§aAuction§8]§a Lelang berhasil dipasang!\n` +
+      `§8  Item  : §f${itemLabel}${qtyLabel}\n` +
+      `§8  Start : §e${fmt(startBid)} Koin\n` +
+      (buyoutPrice > 0 ? `§8  Buyout: §e${fmt(buyoutPrice)} Koin\n` : "") +
+      `§8  Fee   : §c${getFee()}%% §8(saat laku)\n` +
+      `§8  Durasi: §f24 jam`
+    );
+    // Broadcast ke semua player
+    world.sendMessage(`§8[§6Auction§8] §e${player.name} §fmenjual §e${itemLabel}${qtyLabel}${enchBadge} §8- §bLelang §emulai §e${fmt(startBid)} Koin §8| §eBid di §b/auction`);
+  } else {
+    player.sendMessage(
+      `§8[§aAuction§8]§a Listing berhasil dipasang!\n` +
+      `§8  Item  : §f${itemLabel}${qtyLabel}\n` +
+      `§8  Harga : §e${fmt(price)} Koin\n` +
+      `§8  Fee   : §c${getFee()}%% §8(saat laku)\n` +
+      `§8  Durasi: §f24 jam`
+    );
+    // Broadcast ke semua player
+    world.sendMessage(`§8[§6Auction§8] §e${player.name} §fmenjual §e${itemLabel}${qtyLabel}${enchBadge} §fseharga §e${fmt(price)} Koin §8| §eBeli di §b/auction`);
+  }
+
+  if (!hasFirstSaleBonus(player)) {
+    markFirstSale(player);
+    addCoin(player, CFG.FIRST_SALE_BONUS);
+    trackFlow("first_sale", CFG.FIRST_SALE_BONUS);
+    playSfx(player, SFX.SOLD);
+    player.sendMessage(`§8[§6Auction§8]§6 §aSelamat! Bonus penjual pertama: §e+${fmt(CFG.FIRST_SALE_BONUS)} Koin§a!`);
+    world.sendMessage(`§8[§6Auction§8] §e${player.name} §fbaru pertama kali jual di auction!`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI: LISTING SAYA
+// ═══════════════════════════════════════════════════════════
+export async function uiMyListings(player) {
+  while (true) {
+    const pending = getPendingItems(player.id);
+    if (pending.length > 0) {
+      let claimed = 0;
+      const remain = [];
+      for (const itemData of pending) {
+        if (giveItem(player, itemData)) claimed++;
+        else remain.push(itemData);
+      }
+      savePendingItems(player.id, remain);
+      if (claimed > 0) player.sendMessage(`§8[§aAuction§8]§a ${claimed} item pending diklaim!${remain.length ? ` §e(${remain.length} masih pending - inventory penuh)` : ""}`);
+    }
+
+    const pendCoin = claimPendingCoin(player, addCoin);
+    if (pendCoin > 0) {
+      player.sendMessage(`§8[§aAuction§8]§a §e${fmt(pendCoin)} Koin §adari penjualan diterima!`);
+    }
+
+    const myListings = getActiveListings().filter(l => l.sellerId === player.id);
+    if (!myListings.length) {
+      await new ActionFormData()
+        .title("  Listing Saya  §r")
+        .body(`${CFG.HR}\n§8 Kamu tidak punya listing aktif.\n${CFG.HR}`)
+        .button("§f Kembali").show(player);
+      return;
+    }
+
+    const form = new ActionFormData()
+      .title(`§8 ♦ §eLISTING SAYA§r §8♦ §r`)
+      .body(`${CFG.HR}\n§e  ★ L I S T I N G   S A Y A\n§8 Kelola listing aktifmu:\n${CFG.HR}`);
+
+    for (const l of myListings) {
+      const name = displayName(l.itemData);
+      const isAuc = l.mode === "auction";
+      const hasBid = isAuc && l.bidderId && l.currentBid > 0;
+      const badge = isAuc
+        ? (hasBid ? " §a●" : " §8○")
+        : (l.offerId ? " §c[!]" : "");
+      const priceLabel = isAuc
+        ? (hasBid ? `§b${fmt(l.currentBid)}⛃ §8by §f${l.bidderName}` : `§e${fmt(l.startBid)}⛃ §8start`)
+        : `§e${fmt(l.price)}⛃`;
+      const icon = isAuc ? (hasBid ? "textures/items/diamond" : "textures/items/gold_ingot") : "textures/items/emerald";
+      form.button(`§f  ${name}${badge}\n§r  ${priceLabel} §8| §f${timeLeft(l.expiresAt)}`, icon);
+    }
+    form.button("§6  Kembali", "textures/items/arrow");
+
+    const res = await form.show(player);
+    if (res.canceled) throw new UIClose();
+    if (res.selection === myListings.length) return;
+
+    await uiMyListingDetail(player, myListings[res.selection].id);
+  }
+}
+
+async function uiMyListingDetail(player, listingId) {
+  const l = getActiveListings().find(x => x.id === listingId && x.sellerId === player.id);
+  if (!l) { player.sendMessage("§8[§cAuction§8]§c Listing tidak ditemukan."); return; }
+
+  const name = displayName(l.itemData);
+  const ench = enchantSummary(l.itemData);
+  const isAuc = l.mode === "auction";
+  const hasOffer = !isAuc && l.offerId && l.offerAmount > 0;
+  const hasBid = isAuc && l.bidderId && l.currentBid > 0;
+
+  let body = `${CFG.HR}\n§e  ★ D E T A I L\n${CFG.HR}\n`;
+  body += `  §eItem    §8── §f${name}${l.itemData.amount > 1 ? ` x${l.itemData.amount}` : ""}\n`;
+  if (ench) body += `  §eEnchant §8── §d${ench}\n`;
+  body += `  §eMode    §8── ${isAuc ? "§b⚡ Auction" : "§e⛃ Buyout"}\n`;
+
+  if (isAuc) {
+    body += `  §eStart   §8── §e${fmt(l.startBid)}⛃\n`;
+    if (l.price > 0) body += `  §eBuyout  §8── §e${fmt(l.price)}⛃\n`;
+    body += `  §eBid     §8── ${hasBid ? `§b${fmt(l.currentBid)}⛃ §8(${l.bidCount}x) §8oleh §f${l.bidderName}` : "§8Belum ada bid"}\n`;
+  } else {
+    body += `  §eHarga   §8── §e${fmt(l.price)}⛃\n`;
+    if (hasOffer) body += `  §eTawaran §8── §b${fmt(l.offerAmount)}⛃ §8dari §f${l.offerName}\n`;
+  }
+  body += `  §eSisa    §8── §f${timeLeft(l.expiresAt)}\n`;
+  body += `${CFG.HR}`;
+
+  const btns = [];
+  const form = new ActionFormData().title("§8 ♦ §eDETAIL§r §8♦ §r").body(body);
+
+  if (hasOffer) {
+    form.button(`§a  Terima Tawaran\n§r  §e${fmt(l.offerAmount)}⛃ §8dari §f${l.offerName}`, "textures/items/emerald"); btns.push("accept");
+    form.button("§c  Tolak Tawaran", "textures/items/redstone_dust"); btns.push("decline");
+  }
+  // Auction listings settle automatically — no accept/decline
+  form.button("§c  Batalkan Listing\n§r  §8Item kembali, fee tidak refund", "textures/items/redstone_dust"); btns.push("cancel");
+  form.button("§6  Kembali", "textures/items/arrow"); btns.push("back");
+
+  const res = await form.show(player);
+  if (res.canceled || btns[res.selection] === "back") return;
+
+  if (btns[res.selection] === "accept") {
+    await acceptOffer(player, listingId);
+  } else if (btns[res.selection] === "decline") {
+    await declineOffer(player, listingId);
+  } else if (btns[res.selection] === "cancel") {
+    await cancelListing(player, listingId);
+  }
+}
+
+async function acceptOffer(seller, listingId) {
+  const confirm = await new MessageFormData()
+    .title("  Terima Tawaran?  §r")
+    .body(`${CFG.HR}\n§f Terima tawaran ini?\n§8 Koin langsung masuk saldo.\n${CFG.HR}`)
+    .button1("§f Batal").button2("§a Terima").show(seller);
+  if (confirm.canceled || confirm.selection !== 1) return;
+
+  const result = await withLock(seller.id, () => {
+    const l = getListings().find(x => x.id === listingId);
+    if (!l || l.status !== "active" || !l.offerId) return { ok: false };
+
+    const sellFee = calcFee(l.offerAmount, seller);
+    const sellerPayout = l.offerAmount - sellFee;
+    // [§2] Fall back to pending if scoreboard write fails — never destroy.
+    const credited = addCoin(seller, sellerPayout);
+    if (!credited) {
+      addPendingCoin(seller.id, sellerPayout);
+      console.warn(`[Auction] acceptOffer payout fallback to pending: ${seller.name} ${sellerPayout}`);
+    }
+    if (sellFee > 0) trackFlow("auction_fee", -sellFee);
+
+    const buyer = world.getPlayers().find(p => p.id === l.offerId);
+    if (buyer) {
+      const gave = giveItemFromListing(buyer, listingId, l.itemData);
+      if (!gave) addPendingItem(buyer.id, l.itemData);
+      playSfx(buyer, SFX.BUY);
+      buyer.sendMessage(`§8[§aAuction§8]§a Tawaran diterima! §f${displayName(l.itemData)} §adi-claim.${!gave ? "\n§c⚠ Inventory penuh, item masuk pending." : ""}`);
+    } else {
+      addPendingItem(l.offerId, l.itemData);
+      removeCachedClone(listingId);
+      pushNotif(l.offerId, `§8[§aAuction§8]§a Tawaran §b${fmt(l.offerAmount)} Koin §auntuk §f${displayName(l.itemData)} §aditerima!`);
+    }
+
+    updateListing(listingId, x => { x.status = "sold"; x.buyerId = l.offerId; x.buyerName = l.offerName; });
+    pushHistory({ type: "offer_accepted", item: displayName(l.itemData), itemId: l.itemData.typeId, qty: l.itemData.amount, seller: seller.name, buyer: l.offerName, price: l.offerAmount });
+    return { ok: true, amount: l.offerAmount, fee: sellFee, payout: sellerPayout, itemName: displayName(l.itemData), buyerName: l.offerName, sellerName: seller.name, hasEnch: l.itemData.enchantments?.length > 0 };
+  });
+
+  if (!result || !result.ok) { seller.sendMessage("§8[§cAuction§8]§c Gagal memproses."); return; }
+  playSfx(seller, SFX.SOLD);
+  seller.sendMessage(`§8[§aAuction§8]§a Tawaran diterima!\n§8  Item  : §f${result.itemName}\n§8  Harga : §e${fmt(result.amount)} Koin\n§8  Fee   : §c-${fmt(result.fee)} Koin\n§8  Terima: §a${fmt(result.payout)} Koin`);
+
+  if (result.amount >= CFG.BROADCAST_MIN_PRICE) {
+    const enchBadge = result.hasEnch ? " §dEnch" : "";
+    world.sendMessage(
+      `§8[§6Auction§8]§6 §e${result.buyerName} §fmembeli §e${result.itemName}${enchBadge} §fdari §e${result.sellerName} §fseharga §e${fmt(result.amount)} Koin§f!`
+    );
+  }
+}
+
+async function declineOffer(seller, listingId) {
+  const result = await withLock(seller.id, () => {
+    const l = getListings().find(x => x.id === listingId);
+    if (!l || !l.offerId) return false;
+
+    const bidder = world.getPlayers().find(p => p.id === l.offerId);
+    if (bidder) { addCoin(bidder, l.offerAmount); bidder.sendMessage(`§8[§cAuction§8]§c Tawaran §e${fmt(l.offerAmount)} Koin §cuntuk §f${displayName(l.itemData)} §cditolak. Koin dikembalikan.`); }
+    else { pushNotif(l.offerId, `§8[§cAuction§8]§c Tawaran §e${fmt(l.offerAmount)} Koin §cditolak. Koin dikembalikan.`); }
+
+    if (!bidder) {
+      addPendingCoin(l.offerId, l.offerAmount);
+    }
+
+    updateListing(listingId, x => { x.offerId = null; x.offerName = null; x.offerAmount = 0; });
+    return true;
+  });
+
+  if (!result) { seller.sendMessage("§8[§cAuction§8]§c Gagal."); return; }
+  playSfx(seller, SFX.CANCEL);
+  seller.sendMessage("§8[§8Auction§8]§8 Tawaran ditolak. Koin dikembalikan ke penawar.");
+}
+
+async function cancelListing(seller, listingId) {
+  const confirm = await new MessageFormData()
+    .title("  Batalkan Listing?  §r")
+    .body(`${CFG.HR}\n§c Item akan dikembalikan ke inventory.\n§c Fee listing TIDAK dikembalikan!\n${CFG.HR}`)
+    .button1("§f Tidak").button2("§c Batalkan").show(seller);
+  if (confirm.canceled || confirm.selection !== 1) return;
+
+  const result = await withLock(seller.id, () => {
+    const l = getListings().find(x => x.id === listingId);
+    if (!l || l.status !== "active") return { ok: false };
+
+    // Refund buyout offer bidder
+    if (l.offerId && l.offerAmount > 0) {
+      const bidder = world.getPlayers().find(p => p.id === l.offerId);
+      if (bidder) { addCoin(bidder, l.offerAmount); bidder.sendMessage(`§8[§eAuction§8]§e Listing dibatalkan. §f${fmt(l.offerAmount)} Koin §edikembalikan.`); }
+      else {
+        pushNotif(l.offerId, `§8[§eAuction§8]§e Listing dibatalkan. §f${fmt(l.offerAmount)} Koin §edikembalikan.`);
+        addPendingCoin(l.offerId, l.offerAmount);
+      }
+    }
+
+    // Refund auction bidder
+    if (l.mode === "auction" && l.bidderId && l.currentBid > 0) {
+      const bidder = world.getPlayers().find(p => p.id === l.bidderId);
+      if (bidder) { addCoin(bidder, l.currentBid); bidder.sendMessage(`§8[§eAuction§8]§e Lelang dibatalkan. §f${fmt(l.currentBid)} Koin §edikembalikan.`); }
+      else {
+        pushNotif(l.bidderId, `§8[§eAuction§8]§e Lelang dibatalkan. §f${fmt(l.currentBid)} Koin §edikembalikan.`);
+        addPendingCoin(l.bidderId, l.currentBid);
+      }
+    }
+
+    // Return item — gunakan clone cache untuk preservasi banner patterns dll
+    const itemName = displayName(l.itemData);
+    let gave = false;
+    try {
+      // returnItemToOwner: TIDAK strip passport — ini item seller sendiri
+      gave = returnItemToOwner(seller, listingId, l.itemData);
+    } catch (e) {
+      console.error("[Auction] cancelListing giveItem exception:", e);
+    }
+
+    if (!gave) {
+      console.warn(`[Auction] cancelListing: giveItem gagal untuk ${seller.name}, item ${itemName} (${l.itemData.typeId} x${l.itemData.amount}). Masuk pending.`);
+      addPendingItem(seller.id, l.itemData);
+      removeCachedClone(listingId);
+    }
+
+    removeListing(listingId);
+    return { ok: true, gave, itemName };
+  });
+
+  if (!result || !result.ok) { seller.sendMessage("§8[§cAuction§8]§c Gagal membatalkan."); return; }
+  playSfx(seller, SFX.CANCEL);
+  seller.sendMessage(`§8[§8Auction§8]§8 Listing dibatalkan. §f${result.itemName} §8dikembalikan.${!result.gave ? "\n§c⚠ Inventory penuh, item masuk pending. Buka kembali auction untuk klaim." : ""}`);
+}
