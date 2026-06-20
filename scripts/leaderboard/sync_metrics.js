@@ -63,6 +63,7 @@ export function buildServerMetrics() {
   _populateWorldTime(m);
   _populateWeather(m);
   _populateLandClaims(m);
+  _populateZoneBorders(m);
 
   return m;
 }
@@ -395,4 +396,96 @@ function _readLandClaimsFromBridge() {
     }
     return e;
   });
+}
+
+/**
+ * Read zone borders from cross-pack DPs:
+ * - Purge: lt:purge_active (1/0), purgeDB state via scoreboard
+ * - Dragon: lt:end_territory_radius, lt:end_kill_count
+ * - Dragon Fight: dragon alive status
+ * Output: m.zone_borders = [{ type, dim, shape, cx, cz, radius/size, active }]
+ */
+function _populateZoneBorders(m) {
+  const borders = [];
+  try {
+    // ── End Territory (always active — fallback to BASE_RADIUS 200 if DP not set yet) ──
+    const endRadiusRaw = world.getDynamicProperty("lt:end_territory_radius");
+    const endRadius = (typeof endRadiusRaw === "number" && endRadiusRaw > 0) ? endRadiusRaw : 200;
+    borders.push({
+      type: "end_territory",
+      dim: "the_end",
+      shape: "circle",
+      cx: 0, cz: 0,
+      radius: endRadius,
+      active: true,
+      label: "Void Barrier",
+      color: "#a855f7",
+    });
+
+    // ── Dragon Fight Arena (only during fight + cooldown) ──
+    // Detection: check death timestamp DP first (cheap), entity scan only if players in End
+    let dragonFight = false;
+    const deathMs = world.getDynamicProperty("lt:dragon_death_ms") ?? 0;
+    if (deathMs > 0 && (Date.now() - deathMs) < 300000) {
+      dragonFight = true;
+    } else {
+      // Entity scan only when End is loaded (players present)
+      try {
+        const endPlayers = m.players_per_dim ? m.players_per_dim.the_end : 0;
+        if (endPlayers > 0) {
+          const theEnd = world.getDimension("the_end");
+          for (const e of theEnd.getEntities({ type: "minecraft:ender_dragon" })) {
+            if (e && e.isValid) { dragonFight = true; break; }
+          }
+        }
+      } catch {}
+    }
+    if (dragonFight) {
+      borders.push({
+        type: "dragon_fight",
+        dim: "the_end",
+        shape: "circle",
+        cx: 0, cz: 0,
+        radius: 300,
+        active: true,
+        label: "Arena Barrier",
+        color: "#f87171",
+      });
+    }
+
+    // ── Purge Zone (only when active) ──
+    const purgeActive = world.getDynamicProperty("lt:purge_active");
+    if (purgeActive === 1) {
+      // Read purge zone geometry from scoreboard bridge (lt_purge)
+      try {
+        const sb = world.scoreboard.getObjective("lt_purge");
+        if (sb) {
+          const cx = sb.getScore("cx") ?? 0;
+          const cz = sb.getScore("cz") ?? 0;
+          const size = sb.getScore("size") ?? 0;
+          const shape = sb.getScore("shape") ?? 0; // 0=square, 1=circle
+          if (size > 0) {
+            borders.push({
+              type: "purge",
+              dim: "overworld",
+              shape: shape === 1 ? "circle" : "square",
+              cx, cz,
+              radius: size * 16, // chunks to blocks
+              active: true,
+              label: "Purge Zone",
+              color: "#ef4444",
+            });
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+
+  if (borders.length) {
+    m.zone_borders = borders;
+    cachedFullExtras.zone_borders = borders;
+  } else {
+    // Clear cache when no borders are active (purge ended, dragon killed, etc.)
+    delete cachedFullExtras.zone_borders;
+  }
 }
